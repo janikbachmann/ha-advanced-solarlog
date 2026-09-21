@@ -5,12 +5,26 @@
 
   **Alle Werte deiner Solar-Log-Anlage in Home Assistant — auch die, die das offizielle Plugin auslässt.**
 
+  [![Status: Work in Progress][wip-badge]](#status)
+  [![Version][version-badge]][releases]
   [![HACS: Custom][hacs-badge]][hacs]
   [![Validate][validate-badge]][validate]
   [![Lizenz: MIT][license-badge]][license]
 </div>
 
 ---
+
+## Status
+
+> [!WARNING]
+> **Work in Progress — Version 0.1.0.**
+> Diese Integration ist noch **nicht auf einer echten Home-Assistant-Instanz
+> getestet**. Der Code ist durch automatische Tests und die Prüfungen von
+> Home Assistant (`hassfest`) abgedeckt, aber das Zusammenspiel mit einem
+> laufenden Home Assistant und einem echten Gerät steht noch aus.
+>
+> Rechne mit Fehlern, und melde sie bitte als [Issue][issues].
+> **Version 1.0.0 gibt es erst, wenn der produktive Betrieb bestätigt ist.**
 
 Diese Integration liest die Werte deiner Photovoltaik-Anlage über den
 **EnergyOptimizer-P4** aus — das Gerät, das Solar-Log bereits abfragt und die
@@ -193,4 +207,8 @@ Für eine Aufnahme in die HACS-Standardliste gehört es zusätzlich ins
 [my-config]: https://my.home-assistant.io/redirect/config_flow_start/?domain=advanced_solarlog
 [my-config-badge]: https://my.home-assistant.io/badges/config_flow_start.svg
 [brands]: https://github.com/home-assistant/brands
+[wip-badge]: https://img.shields.io/badge/Status-Work%20in%20Progress-orange.svg?style=for-the-badge
+[version-badge]: https://img.shields.io/badge/Version-0.1.0-blue.svg?style=for-the-badge
+[releases]: https://github.com/janikbachmann/ha-advanced-solarlog/releases
+[issues]: https://github.com/janikbachmann/ha-advanced-solarlog/issues
 [power-flow]: https://github.com/flixlix/power-flow-card-plus
