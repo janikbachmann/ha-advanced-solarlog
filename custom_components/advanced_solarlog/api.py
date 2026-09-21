@@ -126,6 +126,12 @@ class AdvancedSolarLogClient:
             raise AdvancedSolarLogError(f"Solar-Log cannot answer this query: {body}")
         # The salt query legitimately carries "ACCESS DENIED" alongside the salt.
         if MARKER_DENIED in text and not text.startswith('{"550"'):
+            _LOGGER.debug(
+                "Solar-Log denied %s; token set=%s, cookie in jar for this host=%s",
+                body,
+                bool(self._token),
+                self._cookie_in_jar(),
+            )
             raise AdvancedSolarLogAuthError(
                 "Solar-Log denied access -- a password is required for this value"
             )
@@ -150,6 +156,7 @@ class AdvancedSolarLogClient:
             f"u={API_USERNAME}&p={self.password}", path="login"
         )
         text = await response.text(errors="replace")
+        _LOGGER.debug("Solar-Log plain-password login response: %s", text[:200])
 
         if "FAILED - User was wrong" in text:
             # This firmware has no password set, so the password is pointless.
@@ -185,6 +192,7 @@ class AdvancedSolarLogClient:
 
         response = await self._post_response(f"u={API_USERNAME}&p={hashed}", path="login")
         text = await response.text(errors="replace")
+        _LOGGER.debug("Solar-Log hashed-password login response: %s", text[:200])
         if "FAILED" not in text:
             # Keep the hash: the device expects it on every later login.
             self.password = hashed
@@ -213,10 +221,27 @@ class AdvancedSolarLogClient:
         """
         cookie = response.cookies.get("SolarLog")
         if not cookie:
+            _LOGGER.warning(
+                "Solar-Log login reported success but sent no 'SolarLog' cookie "
+                "(cookies in the response: %s) -- battery, self-consumption and "
+                "per-inverter values will stay unavailable",
+                list(response.cookies.keys()),
+            )
             return
+        _LOGGER.debug(
+            "Solar-Log session cookie captured (hashed_password=%s)",
+            self._hashed_password,
+        )
         self._session.cookie_jar.update_cookies({"SolarLog": cookie.value})
         if not self._hashed_password:
             self._token = cookie.value
+
+    def _cookie_in_jar(self) -> bool:
+        """Debug helper: is a cookie currently attached for this host."""
+        try:
+            return bool(self._session.cookie_jar.filter_cookies(self.base_url))
+        except Exception:  # noqa: BLE001 - diagnostic only, must never break a request
+            return False
 
     async def async_test_connection(self) -> bool:
         """Check that the host really is a Solar-Log with the interface enabled."""
