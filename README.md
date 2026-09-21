@@ -78,13 +78,24 @@ its current power and this year's yield.
 
 ## Installation
 
+This is a custom integration, not an official Home Assistant plugin, so it
+does not ship with Home Assistant and is not in the default HACS store list.
+It needs [HACS](https://hacs.xyz) installed first (Settings → Devices &
+services → Add integration → "HACS", if you don't have it yet — see the
+[HACS download guide](https://hacs.xyz/docs/use/download/download/)).
+
 ### Via HACS
 
 [![Add repository to HACS][my-hacs-badge]][my-hacs]
 
-Or by hand: HACS → Integrations → ⋮ → **Custom repositories** → add
+Click the button above to open this repository directly in HACS on your own
+Home Assistant instance, then **Download**. Or by hand: HACS → Integrations
+→ ⋮ → **Custom repositories** → add
 `https://github.com/janikbachmann/ha-advanced-solarlog` as an *Integration*,
-then install "Advanced Solar-Log" and restart Home Assistant.
+then install "Advanced Solar-Log".
+
+Either way, **restart Home Assistant** afterwards -- a new integration is
+only picked up after a full restart, not a reload.
 
 ### Manually
 
