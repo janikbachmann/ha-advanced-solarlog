@@ -128,6 +128,64 @@ hashed_app.router.add_post("/getjp", handle_hashed_getjp)
 hashed_app.router.add_post("/login", handle_hashed_login)
 
 
+# A third stand-in server for firmware whose login wants an account name other
+# than "user". It answers a "user" login exactly the way a device with no
+# password set does, so the client cannot tell the two apart from one reply.
+INSTALLER_USERNAME = "installateur"
+INSTALLER_SESSION_COOKIE = "installerxyz"
+
+
+async def handle_installer_login(request):
+    body = await request.text()
+    fields = dict(part.split("=", 1) for part in body.split("&"))
+    if fields.get("u") != INSTALLER_USERNAME:
+        return web.Response(text="FAILED - User was wrong")
+    if fields.get("p") != PASSWORD:
+        return web.Response(text="FAILED - Password was wrong")
+    response = web.Response(text="SUCCESS")
+    response.set_cookie("SolarLog", INSTALLER_SESSION_COOKIE)
+    return response
+
+
+async def handle_installer_getjp(request):
+    body = await request.text()
+    token, _, payload = body.rpartition("; ") if "; " in body else ("", "", body)
+    query = json.loads(payload)
+    if "801" in query:
+        return web.Response(text=json.dumps({"801": {"170": BASIC}}))
+    logged_in = (
+        request.cookies.get("SolarLog") == INSTALLER_SESSION_COOKIE
+        or token.endswith(INSTALLER_SESSION_COOKIE)
+    )
+    if not logged_in:
+        return web.Response(text='{"ACCESS DENIED"}')
+    if "858" in query:
+        return web.Response(text=json.dumps({"858": BATTERY}))
+    return web.Response(text='{"QUERY IMPOSSIBLE 000"}')
+
+
+installer_app = web.Application()
+installer_app.router.add_post("/getjp", handle_installer_getjp)
+installer_app.router.add_post("/login", handle_installer_login)
+
+
+# A fourth server: no password set at all, so every account name is refused.
+async def handle_open_login(request):
+    return web.Response(text="FAILED - User was wrong")
+
+
+async def handle_open_getjp(request):
+    query = json.loads(await request.text())
+    if "801" in query:
+        return web.Response(text=json.dumps({"801": {"170": BASIC}}))
+    return web.Response(text=json.dumps({"858": BATTERY}))
+
+
+open_app = web.Application()
+open_app.router.add_post("/getjp", handle_open_getjp)
+open_app.router.add_post("/login", handle_open_login)
+
+
 def check(label, condition, detail=""):
     print(f"{'PASS' if condition else 'FAIL'}  {label}{'' if condition else f'  -- {detail}'}")
     if not condition:
@@ -276,6 +334,105 @@ async def main():
                 )
         finally:
             await hashed_runner.cleanup()
+
+        # --- firmware whose login wants a different account name. It answers
+        # a "user" login with "FAILED - User was wrong" -- which the client
+        # used to read as "this device has no password", silently giving up
+        # and leaving every protected value denied for good. ---
+        installer_runner = web.AppRunner(installer_app)
+        await installer_runner.setup()
+        await web.TCPSite(installer_runner, "127.0.0.1", 8125).start()
+        try:
+            async with ClientSession() as installer_session:
+                client = api.AdvancedSolarLogClient(
+                    installer_session, "127.0.0.1", port=8125, password=PASSWORD
+                )
+                check(
+                    "login finds the account name the device accepts",
+                    await client.async_login(),
+                )
+                check(
+                    "the accepted account name is remembered",
+                    client.username == INSTALLER_USERNAME,
+                    client.username,
+                )
+                check(
+                    "password survives a 'User was wrong' answer",
+                    client.password == PASSWORD,
+                    client.password,
+                )
+                battery = await client.async_get_battery()
+                check(
+                    "protected values readable after the fallback login",
+                    battery is not None and battery["level"] == 78.0,
+                    battery,
+                )
+        finally:
+            await installer_runner.cleanup()
+
+        # --- a device with no password set refuses every account name; that
+        # must come back as "no session", not as an exception. ---
+        open_runner = web.AppRunner(open_app)
+        await open_runner.setup()
+        await web.TCPSite(open_runner, "127.0.0.1", 8126).start()
+        try:
+            async with ClientSession() as open_session:
+                client = api.AdvancedSolarLogClient(
+                    open_session, "127.0.0.1", port=8126, password=PASSWORD
+                )
+                check(
+                    "an unprotected device reports no session rather than raising",
+                    await client.async_login() is False,
+                )
+        finally:
+            await open_runner.cleanup()
+
+        # --- a dropped session is picked up again instead of failing for good ---
+        relogin_state = {"logged_in": False, "logins": 0}
+
+        async def handle_relogin_login(request):
+            relogin_state["logged_in"] = True
+            relogin_state["logins"] += 1
+            response = web.Response(text="SUCCESS")
+            response.set_cookie("SolarLog", SESSION_COOKIE)
+            return response
+
+        async def handle_relogin_getjp(request):
+            body = await request.text()
+            _, _, payload = body.rpartition("; ") if "; " in body else ("", "", body)
+            query = json.loads(payload)
+            if "801" in query:
+                return web.Response(text=json.dumps({"801": {"170": BASIC}}))
+            if not relogin_state["logged_in"]:
+                return web.Response(text='{"ACCESS DENIED"}')
+            # The device forgets the session after answering once.
+            relogin_state["logged_in"] = False
+            return web.Response(text=json.dumps({"858": BATTERY}))
+
+        relogin_app = web.Application()
+        relogin_app.router.add_post("/getjp", handle_relogin_getjp)
+        relogin_app.router.add_post("/login", handle_relogin_login)
+        relogin_runner = web.AppRunner(relogin_app)
+        await relogin_runner.setup()
+        await web.TCPSite(relogin_runner, "127.0.0.1", 8127).start()
+        try:
+            async with ClientSession() as relogin_session:
+                client = api.AdvancedSolarLogClient(
+                    relogin_session, "127.0.0.1", port=8127, password=PASSWORD
+                )
+                await client.async_login()
+                check("first protected read works", await client.async_get_battery())
+                check(
+                    "a dropped session is re-established on the next read",
+                    await client.async_get_battery() is not None,
+                )
+                check(
+                    "re-login actually happened",
+                    relogin_state["logins"] > 1,
+                    relogin_state,
+                )
+        finally:
+            await relogin_runner.cleanup()
 
         # --- the client must stay read-only ---
         own_methods = api.AdvancedSolarLogClient.__dict__
