@@ -1,108 +1,184 @@
-# Advanced Solar-Log — Home Assistant Integration
+<div align="center">
+  <img src="custom_components/advanced_solarlog/brand/icon.png" alt="Advanced Solar-Log" width="128">
 
-Custom Integration für Home Assistant, die den EnergyOptimizer-P4 über dieselbe
-HTTP/JSON-API abfragt wie dessen eigene Web-UI. Damit stehen in Home Assistant
-alle Werte zur Verfügung, die das Gerät von Solar-Log holt — **inklusive
-Batterieleistung und Ladestand**, die im offiziellen Solar-Log-Plugin fehlen.
+  # Advanced Solar-Log
 
-Die Integration spricht **nur das lokale Gerät** an (kein Cloud-Dienst), pollt
-im einstellbaren Intervall und kommt ohne zusätzliche Python-Abhängigkeiten aus.
+  **Alle Werte deiner Solar-Log-Anlage in Home Assistant — auch die, die das offizielle Plugin auslässt.**
 
-> **Rein lesend.** Die Integration ruft ausschliesslich die GET-Routen
-> `/api/status`, `/api/sysinfo` und `/api/alarms` auf und schreibt nichts auf
-> das Gerät. Steckdosen schalten, Automatikmodus umschalten, Refresh und
-> Alarmquittierung sind vorbereitet, aber bewusst nicht aktiv — der Code dazu
-> liegt unter [`archive/`](archive/README.md).
+  [![HACS: Custom][hacs-badge]][hacs]
+  [![Validate][validate-badge]][validate]
+  [![Lizenz: MIT][license-badge]][license]
+</div>
+
+---
+
+Diese Integration liest die Werte deiner Photovoltaik-Anlage über den
+**EnergyOptimizer-P4** aus — das Gerät, das Solar-Log bereits abfragt und die
+Daten aufbereitet bereitstellt. Dadurch landen in Home Assistant auch
+**Batterieleistung und Ladestand**, die im offiziellen Solar-Log-Plugin fehlen.
+
+Die Integration arbeitet rein lokal: kein Cloud-Dienst, keine zusätzlichen
+Python-Abhängigkeiten, keine Konfiguration in YAML.
+
+## Warum diese Integration
+
+| | Offizielles Solar-Log-Plugin | Advanced Solar-Log |
+|---|---|---|
+| Produktion, Verbrauch, Netz | ✅ | ✅ |
+| **Batterieleistung und Ladestand** | ❌ | ✅ |
+| Tages- und Gesamtzähler fürs Energie-Dashboard | teilweise | ✅ |
+| Stromkosten und Einspeiseerlös | ❌ | ✅ |
+| Anlagen-Alarme und Gerätediagnose | ❌ | ✅ |
+| Einrichtung über die Oberfläche | ✅ | ✅ |
 
 ## Entitäten
 
-### Anlagenwerte (aus `GET /api/status`)
+### Leistung
 
-| Entity | Quelle | Einheit |
+| Entität | Einheit | Bemerkung |
 |---|---|---|
-| Produktion / Verbrauch / Netzleistung | `prod`, `cons`, `grid` | W |
-| **Batterieleistung** (+ laden / − entladen) | `batt` | W |
-| **Batterie-Ladestand** | `soc` | % |
-| Produktion / Verbrauch / Netzbezug / Einspeisung — heute | `energy.dp/dc/dgi/dgo` | kWh |
-| dieselben Zähler — gesamt | `energy.tp/tc/tgi/tgo` | kWh |
-| Bezugskosten, Einspeiseerlös, Eigenverbrauchswert, Grundgebühr | `cost.*` | CHF |
+| Produktion | W | aktuelle Erzeugung |
+| Verbrauch | W | aktueller Hausverbrauch |
+| Netzleistung | W | positiv = Bezug, negativ = Einspeisung |
+| **Batterieleistung** | W | positiv = laden, negativ = entladen |
+| **Batterie-Ladestand** | % | |
 
-Batterie- und Kostensensoren werden nur angelegt, wenn das Gerät die Felder
-liefert — `batt`/`soc` nur bei Anlagen mit Batterie, `cost` nur, wenn auf dem
-Gerät ein Strompreis hinterlegt ist. Die Firmware rechnet in Rappen; die
-Integration rechnet auf CHF um, damit Home Assistants Währungslogik greift.
+### Energie
 
-Die Zähler haben `state_class: total_increasing` und passen damit direkt ins
-**Energie-Dashboard** von Home Assistant.
+Produktion, Verbrauch, Netzbezug und Einspeisung — jeweils **heute** und
+**gesamt**, in kWh. Alle als `total_increasing` deklariert und damit direkt im
+Energie-Dashboard verwendbar.
+
+### Kosten
+
+Bezugskosten, Einspeiseerlös, Eigenverbrauchswert und anteilige Grundgebühr für
+den laufenden Tag, in CHF. Erscheinen nur, wenn am Gerät ein Strompreis
+hinterlegt ist.
 
 ### Zustand und Diagnose
 
-Binärsensoren für Fail-Safe, Batterie-Vorrang-Blockade, aktiven Alarm,
-MQTT-Verbindung, Ethernet-Link, NVS-Fehler und vorhandenes Absturzabbild;
-Diagnosesensoren für Alter und nächsten Zeitpunkt der Solar-Log-Abfrage,
-offene Alarme und deren Schwere, Status-LED, Laufzeit, Chip-Temperatur,
-freien Speicher, Absturzzähler, Neustartgrund und Firmware-Build.
+Fail-Safe, Batterie-Vorrang-Blockade, aktiver Alarm, MQTT-Verbindung,
+Ethernet-Link, NVS-Fehler, Absturzabbild — dazu Alter und nächster Zeitpunkt der
+Solar-Log-Abfrage, offene Alarme samt Schwere, Status-LED, Laufzeit,
+Chip-Temperatur, freier Speicher, Absturzzähler, Neustartgrund und
+Firmware-Build.
 
-Steckdosen erscheinen nicht — weder als Schalter noch als Messwerte. Die
-Integration zeigt ausschliesslich die Werte der Anlage.
+> Batterie- und Kostensensoren werden nur angelegt, wenn das Gerät die Felder
+> auch liefert. Anlagen ohne Batterie bekommen keine leeren Entitäten.
 
 ## Installation
 
-### HACS
+### Über HACS
 
-1. HACS → Integrationen → ⋮ → Benutzerdefinierte Repositories
-2. `https://github.com/janikbachmann/ha-advanced-solarlog` als Kategorie
-   „Integration“ hinzufügen
-3. „Advanced Solar-Log“ installieren und Home Assistant neu starten
+[![Repository zu HACS hinzufügen][my-hacs-badge]][my-hacs]
+
+Oder von Hand: HACS → Integrationen → ⋮ → **Benutzerdefinierte Repositories** →
+`https://github.com/janikbachmann/ha-advanced-solarlog` als Kategorie
+*Integration* hinzufügen, danach „Advanced Solar-Log" installieren und Home
+Assistant neu starten.
 
 ### Manuell
 
-`custom_components/advanced_solarlog/` in das `config/custom_components/`-
-Verzeichnis von Home Assistant kopieren und neu starten.
+Den Ordner `custom_components/advanced_solarlog/` in das
+`config/custom_components/`-Verzeichnis von Home Assistant kopieren und neu
+starten.
 
 ## Einrichtung
 
-Einstellungen → Geräte & Dienste → Integration hinzufügen → „Advanced Solar-Log“.
+[![Integration hinzufügen][my-config-badge]][my-config]
 
-- **Host**: `energyoptimizer.local` oder die IP des Geräts
-- **Port**: 80
-- **Web-Passwort**: das am Gerät gesetzte Passwort. Der Benutzername ist in der
-  Firmware fest auf `admin` verdrahtet. Ist am Gerät kein Passwort gesetzt, ist
-  die API offen und das Feld bleibt leer.
+Oder: **Einstellungen → Geräte & Dienste → Integration hinzufügen → „Advanced
+Solar-Log"**.
 
-Das Abfrageintervall (Standard 15 s) lässt sich danach unter „Konfigurieren“
-ändern. Die Web-UI des Geräts pollt jede Sekunde; für Home Assistant ist ein
-gröberes Intervall sinnvoll. Ein serverseitiges Rate-Limit gibt es auf den
-GET-Routen nicht.
+| Feld | Wert |
+|---|---|
+| Host | `energyoptimizer.local` oder die IP des Geräts |
+| Port | `80` |
+| Web-Passwort | das am Gerät gesetzte Passwort — leer lassen, wenn keins gesetzt ist |
 
-Lehnt das Gerät die Zugangsdaten ab, antworten alle Routen einheitlich mit
-`401 {"ok":false,"auth":false}`. Die Integration startet dann automatisch einen
-Re-Auth-Dialog, in dem nur das Passwort neu eingegeben wird.
+Der Benutzername ist in der Firmware fest auf `admin` verdrahtet und wird nicht
+abgefragt.
 
-## Hinweise
+Das **Abfrageintervall** (Standard 15 Sekunden) lässt sich danach unter
+*Konfigurieren* ändern. Die Web-Oberfläche des Geräts pollt jede Sekunde; für
+Home Assistant ist ein gröberes Intervall sinnvoll.
 
-- Reines HTTP im LAN, keine TLS-Verschlüsselung — das Gerät bietet kein HTTPS.
-- Passwörter und Secrets (Solar-Log-, MQTT-, Web-Passwort, ntfy-Topic) sind auf
-  keiner Leseroute abrufbar und tauchen daher auch in den Diagnosedaten nicht
-  auf.
-- Der Domain-Name `advanced_solarlog` ist unveränderlich und steckt in jeder
-  Entity-ID. Er lässt sich nach der ersten Installation nicht mehr ändern, ohne
-  alle Entitäten neu anzulegen.
+## Energie-Dashboard
+
+Einstellungen → Dashboards → Energie:
+
+- **Netzbezug** → `Netzbezug heute`
+- **Einspeisung** → `Einspeisung heute`
+- **Solarproduktion** → `Produktion heute`
+- **Batterie** → `Batterieleistung` bzw. die Batteriezähler, falls vorhanden
+
+## Was die Integration nicht tut
+
+Sie ist **rein lesend**. Aufgerufen werden ausschliesslich `GET /api/status`,
+`GET /api/sysinfo` und `GET /api/alarms`; auf das Gerät wird nichts
+geschrieben.
+
+Steckdosen erscheinen weder als Schalter noch als Messwerte. Der Code dafür —
+Relais- und Automatik-Schalter, Solar-Log-Refresh, Alarmquittierung — liegt
+unter [`archive/`](archive/README.md), wird von Home Assistant nicht geladen und
+ist dort mit Reaktivierungsanleitung dokumentiert.
+
+## Fehlersuche
+
+**Die Einrichtung meldet „Verbindung fehlgeschlagen".**
+Ist `energyoptimizer.local` aus dem Home-Assistant-Netz erreichbar? Im Zweifel
+die IP-Adresse direkt eintragen. Das Gerät spricht reines HTTP, kein HTTPS.
+
+**Die Einrichtung meldet „Passwort wurde abgelehnt".**
+Das Web-Passwort des Geräts, nicht das Solar-Log-Passwort. Ist am Gerät keins
+gesetzt, muss das Feld leer bleiben.
+
+**Batterie-Entitäten fehlen.**
+Das Gerät liefert `batt` und `soc` nur bei Anlagen mit Batterie. Prüfen lässt
+sich das unter *Geräte & Dienste → Advanced Solar-Log → Diagnose herunterladen*.
+
+**Werte stehen auf „nicht verfügbar".**
+Der Sensor *Letzte Solar-Log-Abfrage* zeigt, wann das Gerät zuletzt
+erfolgreich bei Solar-Log war. Bleibt er leer, hängt es zwischen Gerät und
+Solar-Log, nicht an Home Assistant.
 
 ## Entwicklung
 
-Die API-Referenz, gegen die diese Integration gebaut ist, liegt als
-`HOMEASSISTANT_API.md` beim Firmware-Projekt.
+Die beiden Smoke-Tests laufen ohne Home-Assistant-Installation — einer gegen
+einen nachgebauten Geräte-Server, einer prüft jede Sensordefinition gegen einen
+Beispiel-Payload:
 
-Die beiden Smoke-Tests laufen ohne Home-Assistant-Installation gegen einen
-nachgebauten Geräte-Server bzw. gegen Stub-Module:
-
-```
+```bash
 pip install aiohttp
 python3 tests/test_api.py
 python3 tests/test_entities.py
 ```
 
-Für eine Aufnahme in die HACS-Standardliste wäre zusätzlich ein Brand-Asset
-(`icon.png`) nötig. Als benutzerdefiniertes Repository funktioniert die
-Integration auch ohne.
+Die CI prüft zusätzlich mit `hassfest` die Manifest- und Übersetzungsdateien
+gegen die Regeln von Home Assistant und mit `hacs/action` die
+Repository-Struktur.
+
+Der Domain-Name `advanced_solarlog` steckt in jeder Entity-ID und lässt sich
+nach der ersten Installation nicht mehr ändern, ohne alle Entitäten neu
+anzulegen.
+
+`custom_components/advanced_solarlog/brand/icon.png` ist ein Platzhalter-Icon.
+Für eine Aufnahme in die HACS-Standardliste gehört es zusätzlich ins
+[`home-assistant/brands`][brands]-Repository.
+
+## Lizenz
+
+[MIT](LICENSE)
+
+<!-- Links -->
+[hacs]: https://github.com/hacs/integration
+[hacs-badge]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge
+[validate]: https://github.com/janikbachmann/ha-advanced-solarlog/actions/workflows/validate.yml
+[validate-badge]: https://img.shields.io/github/actions/workflow/status/janikbachmann/ha-advanced-solarlog/validate.yml?style=for-the-badge&label=Validate
+[license]: LICENSE
+[license-badge]: https://img.shields.io/badge/Lizenz-MIT-green.svg?style=for-the-badge
+[my-hacs]: https://my.home-assistant.io/redirect/hacs_repository/?owner=janikbachmann&repository=ha-advanced-solarlog&category=integration
+[my-hacs-badge]: https://my.home-assistant.io/badges/hacs_repository.svg
+[my-config]: https://my.home-assistant.io/redirect/config_flow_start/?domain=advanced_solarlog
+[my-config-badge]: https://my.home-assistant.io/badges/config_flow_start.svg
+[brands]: https://github.com/home-assistant/brands
