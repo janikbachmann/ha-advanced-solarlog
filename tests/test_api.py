@@ -367,6 +367,26 @@ async def main():
                     battery is not None and battery["level"] == 78.0,
                     battery,
                 )
+                report = client.login_report()
+                check(
+                    "the diagnostics report names every account name tried",
+                    [a["username"] for a in report["attempts"]]
+                    == list(api.LOGIN_USERNAMES)[
+                        : list(api.LOGIN_USERNAMES).index(INSTALLER_USERNAME) + 1
+                    ],
+                    report,
+                )
+                check(
+                    "the report quotes what the device answered",
+                    "User was wrong" in report["attempts"][0]["answer"]
+                    and report["attempts"][-1]["outcome"] == "accepted",
+                    report,
+                )
+                check(
+                    "the report carries no password",
+                    PASSWORD not in json.dumps(report),
+                    report,
+                )
         finally:
             await installer_runner.cleanup()
 

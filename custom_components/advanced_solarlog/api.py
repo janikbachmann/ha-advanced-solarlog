@@ -71,6 +71,9 @@ class AdvancedSolarLogClient:
         # repeated in the request body.
         self._token = ""
         self._hashed_password = False
+        # What the device answered to each login attempt of the last login.
+        # Carries no password, and is what the diagnostics download reports.
+        self.login_trace: list[dict[str, Any]] = []
 
     @property
     def base_url(self) -> str:
@@ -157,6 +160,7 @@ class AdvancedSolarLogClient:
         identically whether it has no password set or expects a different
         account name, so that case is logged rather than assumed away.
         """
+        self.login_trace = []
         if not self.password:
             return False
 
@@ -168,17 +172,21 @@ class AdvancedSolarLogClient:
             _LOGGER.debug("Solar-Log login as %r answered: %s", username, text[:200])
 
             if "FAILED - User was wrong" in text:
+                self._trace_login(username, text, response, "account name refused")
                 continue
 
             if "FAILED - Password was wrong" in text:
                 # Newer firmware expects the password bcrypt-hashed with a salt
                 # the device hands out. Only a second failure is a real auth
                 # error.
+                self._trace_login(username, text, response, "retrying hashed")
                 text, response = await self._retry_login_hashed(username)
 
             if "FAILED" in text:
+                self._trace_login(username, text, response, "password refused")
                 raise AdvancedSolarLogAuthError("Solar-Log rejected the password")
 
+            self._trace_login(username, text, response, "accepted")
             self.username = username
             self._remember_session(response)
             return True
@@ -191,6 +199,42 @@ class AdvancedSolarLogClient:
             ", ".join(LOGIN_USERNAMES),
         )
         return False
+
+    def _trace_login(
+        self,
+        username: str,
+        text: str,
+        response: aiohttp.ClientResponse,
+        outcome: str,
+    ) -> None:
+        """Record what the device answered, for the diagnostics download.
+
+        Which account name a given firmware accepts is the one thing that
+        cannot be guessed from here, and asking for a debug log to find out
+        has proven to be a lot to ask. The answer is a single short string
+        per attempt, so the diagnostics file carries it instead. No password
+        goes in -- the request body is not recorded, only the reply.
+        """
+        self.login_trace.append(
+            {
+                "username": username,
+                "outcome": outcome,
+                "answer": text[:120],
+                "cookies": list(response.cookies.keys()),
+            }
+        )
+
+    def login_report(self) -> dict[str, Any]:
+        """Summarise the session state for the diagnostics download."""
+        return {
+            "password_configured": bool(self.password),
+            "accepted_username": self.username if self.login_trace else None,
+            "known_usernames": list(LOGIN_USERNAMES),
+            "password_is_hashed": self._hashed_password,
+            "body_token_set": bool(self._token),
+            "cookie_in_jar": self._cookie_in_jar(),
+            "attempts": self.login_trace,
+        }
 
     async def _retry_login_hashed(
         self, username: str
@@ -205,6 +249,14 @@ class AdvancedSolarLogClient:
             .get("104")
         )
         if not salt or salt == MARKER_IMPOSSIBLE:
+            self.login_trace.append(
+                {
+                    "username": username,
+                    "outcome": "no salt for the hashed login",
+                    "answer": str(salt)[:120],
+                    "cookies": [],
+                }
+            )
             raise AdvancedSolarLogAuthError("Solar-Log rejected the password")
 
         try:
