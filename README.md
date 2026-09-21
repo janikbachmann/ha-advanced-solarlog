@@ -17,7 +17,7 @@
 ## Status
 
 > [!WARNING]
-> **Work in Progress — version 0.1.3.**
+> **Work in Progress — version 0.1.4.**
 > This integration has **not yet been tested against a real Home Assistant
 > instance**. The code is covered by automated tests and Home Assistant's own
 > checks (`hassfest`), but running it against a live Home Assistant and a real
@@ -157,6 +157,13 @@ HTTPS.
 **Setup reports "invalid auth".**
 This is the device's own web password, not a Solar-Log portal account. Leave
 the field empty if the device has no password set.
+
+**Battery and inverter values stay unavailable even with the right password.**
+The device's login expects an account name as well as the password, and
+firmware differs in which one it accepts. The integration tries the known
+names in turn; if none is accepted it says so in the Home Assistant log,
+naming the ones it tried. Report that line as an [issue][issues] with the
+name your device's own login screen offers, and it can be added.
 
 **Battery or inverter entities are missing.**
 They need a password: without one, only the unprotected main values are

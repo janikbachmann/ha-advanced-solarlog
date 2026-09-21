@@ -14,9 +14,12 @@ DEFAULT_POLL_INTERVAL: Final = 60
 MIN_POLL_INTERVAL: Final = 15
 MAX_POLL_INTERVAL: Final = 600
 
-# Solar-Log's web login always uses the account "user"; only the password is
-# configurable on the device.
-API_USERNAME: Final = "user"
+# Account names the login accepts. "user" covers the common case, but the
+# device's own login screen also offers an installer role, and firmware that
+# expects one of those answers a "user" login with "FAILED - User was wrong"
+# -- the same answer it gives when no password is set at all, so the names are
+# tried in turn before concluding the device is unprotected.
+LOGIN_USERNAMES: Final = ("user", "installer", "installateur", "pm")
 
 MANUFACTURER: Final = "Solare Datensysteme"
 MODEL: Final = "Solar-Log"

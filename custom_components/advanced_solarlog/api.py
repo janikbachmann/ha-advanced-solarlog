@@ -23,8 +23,8 @@ from typing import Any
 import aiohttp
 
 from .const import (
-    API_USERNAME,
     DEFAULT_PORT,
+    LOGIN_USERNAMES,
     REQ_BASIC,
     REQ_BATTERY,
     REQ_DEVICE_LIST,
@@ -65,6 +65,8 @@ class AdvancedSolarLogClient:
         self.host = host
         self.port = port
         self.password = password or ""
+        # The account name the device accepted, once one has been found.
+        self.username = LOGIN_USERNAMES[0]
         # Older firmware ignores the cookie and expects the session token
         # repeated in the request body.
         self._token = ""
@@ -118,7 +120,7 @@ class AdvancedSolarLogClient:
         response = await self._post_response(body, path)
         return await response.text(errors="replace")
 
-    async def _request(self, body: str) -> dict[str, Any]:
+    async def _request(self, body: str, *, allow_relogin: bool = True) -> dict[str, Any]:
         """Send one `/getjp` request and return the decoded response."""
         text = await self._post(body)
 
@@ -132,6 +134,10 @@ class AdvancedSolarLogClient:
                 bool(self._token),
                 self._cookie_in_jar(),
             )
+            # The device drops a session after a while, and nothing else in the
+            # integration notices -- so a denial is worth one fresh login.
+            if allow_relogin and self.password and await self.async_login():
+                return await self._request(body, allow_relogin=False)
             raise AdvancedSolarLogAuthError(
                 "Solar-Log denied access -- a password is required for this value"
             )
@@ -146,40 +152,58 @@ class AdvancedSolarLogClient:
     async def async_login(self) -> bool:
         """Log in if a password is configured.
 
-        Returns True when a session was established, False when the device
-        turns out not to require a password at all.
+        Returns True when a session was established, False when no account
+        name this integration knows was accepted -- which the device reports
+        identically whether it has no password set or expects a different
+        account name, so that case is logged rather than assumed away.
         """
         if not self.password:
             return False
 
-        response = await self._post_response(
-            f"u={API_USERNAME}&p={self.password}", path="login"
+        for username in LOGIN_USERNAMES:
+            response = await self._post_response(
+                f"u={username}&p={self.password}", path="login"
+            )
+            text = await response.text(errors="replace")
+            _LOGGER.debug("Solar-Log login as %r answered: %s", username, text[:200])
+
+            if "FAILED - User was wrong" in text:
+                continue
+
+            if "FAILED - Password was wrong" in text:
+                # Newer firmware expects the password bcrypt-hashed with a salt
+                # the device hands out. Only a second failure is a real auth
+                # error.
+                text, response = await self._retry_login_hashed(username)
+
+            if "FAILED" in text:
+                raise AdvancedSolarLogAuthError("Solar-Log rejected the password")
+
+            self.username = username
+            self._remember_session(response)
+            return True
+
+        _LOGGER.warning(
+            "Solar-Log answered 'User was wrong' for every account name this "
+            "integration knows (%s). Either the device has no password set, or "
+            "its login expects an account name that is not in that list -- "
+            "battery, self-consumption and per-inverter values stay unavailable",
+            ", ".join(LOGIN_USERNAMES),
         )
-        text = await response.text(errors="replace")
-        _LOGGER.debug("Solar-Log plain-password login response: %s", text[:200])
+        return False
 
-        if "FAILED - User was wrong" in text:
-            # This firmware has no password set, so the password is pointless.
-            self.password = ""
-            return False
-
-        if "FAILED - Password was wrong" in text:
-            # Newer firmware expects the password bcrypt-hashed with a salt the
-            # device hands out. Only a second failure is a real auth error.
-            text, response = await self._retry_login_hashed()
-
-        if "FAILED" in text:
-            raise AdvancedSolarLogAuthError("Solar-Log rejected the password")
-
-        self._remember_session(response)
-        return True
-
-    async def _retry_login_hashed(self) -> tuple[str, aiohttp.ClientResponse]:
+    async def _retry_login_hashed(
+        self, username: str
+    ) -> tuple[str, aiohttp.ClientResponse]:
         """Second login attempt with the bcrypt-hashed password."""
         # Imported lazily: bcrypt is only needed on firmware that hashes.
         import bcrypt  # noqa: PLC0415
 
-        salt = (await self._request(REQ_SALT)).get("550", {}).get("104")
+        salt = (
+            (await self._request(REQ_SALT, allow_relogin=False))
+            .get("550", {})
+            .get("104")
+        )
         if not salt or salt == MARKER_IMPOSSIBLE:
             raise AdvancedSolarLogAuthError("Solar-Log rejected the password")
 
@@ -190,7 +214,7 @@ class AdvancedSolarLogClient:
                 "Solar-Log returned a salt that bcrypt does not accept"
             ) from err
 
-        response = await self._post_response(f"u={API_USERNAME}&p={hashed}", path="login")
+        response = await self._post_response(f"u={username}&p={hashed}", path="login")
         text = await response.text(errors="replace")
         _LOGGER.debug("Solar-Log hashed-password login response: %s", text[:200])
         if "FAILED" not in text:
