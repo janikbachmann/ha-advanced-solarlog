@@ -103,14 +103,25 @@ Das **Abfrageintervall** (Standard 15 Sekunden) lässt sich danach unter
 *Konfigurieren* ändern. Die Web-Oberfläche des Geräts pollt jede Sekunde; für
 Home Assistant ist ein gröberes Intervall sinnvoll.
 
-## Energie-Dashboard
+## Dashboard
 
-Einstellungen → Dashboards → Energie:
+Die Integration liefert die Werte; die Darstellung übernehmen die Karten von
+Home Assistant. Ein fertiges Beispiel mit Energiefluss, Momentanwerten,
+Batterie-Anzeige, Tagesbilanz und Verlauf liegt unter
+[`examples/dashboard.yaml`](examples/dashboard.yaml) — einfügen über
+Dashboard → ⋮ → *Raw-Konfigurationseditor*.
+
+Für das eingebaute **Energie-Dashboard** unter Einstellungen → Dashboards →
+Energie:
 
 - **Netzbezug** → `Netzbezug heute`
 - **Einspeisung** → `Einspeisung heute`
 - **Solarproduktion** → `Produktion heute`
-- **Batterie** → `Batterieleistung` bzw. die Batteriezähler, falls vorhanden
+- **Batterie** → die Batteriezähler, falls vorhanden
+
+Eine Live-Flussanzeige wie in der Geräte-App liefert zusätzlich die Karte
+[Power Flow Card Plus][power-flow] aus HACS; die passende Konfiguration steht
+als Kommentar in der Beispieldatei.
 
 ## Was die Integration nicht tut
 
@@ -182,3 +193,4 @@ Für eine Aufnahme in die HACS-Standardliste gehört es zusätzlich ins
 [my-config]: https://my.home-assistant.io/redirect/config_flow_start/?domain=advanced_solarlog
 [my-config-badge]: https://my.home-assistant.io/badges/config_flow_start.svg
 [brands]: https://github.com/home-assistant/brands
+[power-flow]: https://github.com/flixlix/power-flow-card-plus

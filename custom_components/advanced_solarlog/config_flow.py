@@ -71,7 +71,10 @@ class AdvancedSolarLogConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 if not user_input.get(CONF_PASSWORD):
                     user_input.pop(CONF_PASSWORD, None)
-                return self.async_create_entry(title=f"Advanced Solar-Log ({host})", data=user_input)
+                # Kurzer Titel: er wird zum Geraetenamen und steckt damit in jeder
+                # Entity-ID. Welches Geraet gemeint ist, zeigt die Geraeteseite
+                # ueber configuration_url.
+                return self.async_create_entry(title="Advanced Solar-Log", data=user_input)
 
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_SCHEMA, errors=errors
