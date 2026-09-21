@@ -17,7 +17,7 @@
 ## Status
 
 > [!WARNING]
-> **Work in Progress — version 0.1.0.**
+> **Work in Progress — version 0.1.1.**
 > This integration has **not yet been tested against a real Home Assistant
 > instance**. The code is covered by automated tests and Home Assistant's own
 > checks (`hassfest`), but running it against a live Home Assistant and a real
