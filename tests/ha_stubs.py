@@ -1,4 +1,4 @@
-"""Minimale homeassistant-Stubs, damit sensor.py/binary_sensor.py ohne HA importierbar sind."""
+"""Minimal homeassistant stubs so the platform modules import without Home Assistant."""
 import sys, types
 from dataclasses import dataclass
 from enum import StrEnum
@@ -31,6 +31,7 @@ class _Desc:
     suggested_unit_of_measurement: str | None = None
     suggested_display_precision: int | None = None
     entity_category: object = None
+    entity_registry_enabled_default: bool = True
     options: list | None = None
     name: object = None
     icon: str | None = None
@@ -41,7 +42,7 @@ const.PERCENTAGE = "%"
 const.EntityCategory = _enum("EntityCategory", ["DIAGNOSTIC", "CONFIG"])
 for unit_name, members in {
     "UnitOfElectricCurrent": ["AMPERE"], "UnitOfElectricPotential": ["VOLT"],
-    "UnitOfEnergy": ["KILO_WATT_HOUR"], "UnitOfInformation": ["BYTES", "KILOBYTES"],
+    "UnitOfEnergy": ["KILO_WATT_HOUR", "WATT_HOUR"], "UnitOfInformation": ["BYTES", "KILOBYTES"],
     "UnitOfPower": ["WATT"], "UnitOfTemperature": ["CELSIUS"],
     "UnitOfTime": ["SECONDS", "MINUTES"],
 }.items():
@@ -54,7 +55,7 @@ sensor.SensorEntity = type("SensorEntity", (), {})
 sensor.SensorEntityDescription = _Desc
 sensor.SensorDeviceClass = _enum("SensorDeviceClass", [
     "POWER", "BATTERY", "ENERGY", "MONETARY", "DURATION", "ENUM",
-    "TEMPERATURE", "DATA_SIZE", "VOLTAGE", "CURRENT"])
+    "TEMPERATURE", "DATA_SIZE", "VOLTAGE", "CURRENT", "TIMESTAMP"])
 sensor.SensorStateClass = _enum("SensorStateClass", ["MEASUREMENT", "TOTAL", "TOTAL_INCREASING"])
 
 bs = _mod("homeassistant.components.binary_sensor")
@@ -78,3 +79,9 @@ dr.DeviceInfo = dict
 exc = _mod("homeassistant.exceptions")
 exc.ConfigEntryAuthFailed = type("ConfigEntryAuthFailed", (Exception,), {})
 exc.HomeAssistantError = type("HomeAssistantError", (Exception,), {})
+
+import datetime as _datetime
+dt_util = _mod("homeassistant.util.dt")
+dt_util.get_default_time_zone = lambda: _datetime.timezone.utc
+util = _mod("homeassistant.util")
+util.dt = dt_util

@@ -1,47 +1,109 @@
-"""DataUpdateCoordinator fuer den EnergyOptimizer."""
+"""Polls the Solar-Log device and hands one consistent snapshot to the entities."""
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
-from .api import AdvancedSolarLogAuthError, AdvancedSolarLogClient, AdvancedSolarLogError
-from .const import DOMAIN
+from .api import (
+    AdvancedSolarLogAuthError,
+    AdvancedSolarLogClient,
+    AdvancedSolarLogError,
+    parse_timestamp,
+)
+from .const import (
+    DOMAIN,
+    FIELD_CONSUMPTION_AC,
+    FIELD_LAST_UPDATED,
+    FIELD_POWER_AC,
+    FIELD_POWER_DC,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
+class InverterData:
+    """One inverter behind the Solar-Log."""
+
+    name: str
+    power: float | None = None
+    yield_year: float | None = None
+
+
+@dataclass(slots=True)
 class AdvancedSolarLogData:
-    """Ein Satz zusammengehoeriger Antworten eines Poll-Durchlaufs."""
+    """Everything one poll produced."""
 
-    status: dict[str, Any] = field(default_factory=dict)
-    sysinfo: dict[str, Any] = field(default_factory=dict)
-    alarms: dict[str, Any] = field(default_factory=dict)
+    # Raw 801/170 block, keyed by Solar-Log's field numbers.
+    values: dict[str, Any] = field(default_factory=dict)
+    battery: dict[str, float] | None = None
+    energy: dict[str, float] | None = None
+    inverters: dict[int, InverterData] = field(default_factory=dict)
+    last_updated: datetime | None = None
+
+    def number(self, field_number: str) -> float | None:
+        """Read one field of the main block as a number."""
+        value = self.values.get(field_number)
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
 
     @property
-    def energy(self) -> dict[str, Any]:
-        """Das `energy`-Unterobjekt von /api/status."""
-        return self.status.get("energy") or {}
+    def grid_power(self) -> float | None:
+        """Grid exchange in W: positive means import, negative means feed-in.
+
+        Solar-Log reports production and consumption separately, so this is
+        derived rather than measured.
+        """
+        production = self.number(FIELD_POWER_AC)
+        consumption = self.number(FIELD_CONSUMPTION_AC)
+        if production is None or consumption is None:
+            return None
+        return consumption - production
 
     @property
-    def cost(self) -> dict[str, Any]:
-        """Das `cost`-Unterobjekt - fehlt, wenn kein Preis konfiguriert ist."""
-        return self.status.get("cost") or {}
+    def battery_power(self) -> float | None:
+        """Battery power in W: positive means charging, negative discharging."""
+        if self.battery is None:
+            return None
+        return self.battery["charge_power"] - self.battery["discharge_power"]
+
+    @property
+    def alternator_loss(self) -> float | None:
+        """Difference between DC input and AC output of the inverters, in W."""
+        power_dc = self.number(FIELD_POWER_DC)
+        power_ac = self.number(FIELD_POWER_AC)
+        if power_dc is None or power_ac is None:
+            return None
+        return power_dc - power_ac
+
+    @property
+    def efficiency(self) -> float | None:
+        """Inverter efficiency in percent."""
+        power_dc = self.number(FIELD_POWER_DC)
+        power_ac = self.number(FIELD_POWER_AC)
+        if not power_dc or power_ac is None:
+            return None
+        return power_ac / power_dc * 100
 
 
 AdvancedSolarLogConfigEntry = ConfigEntry
 
 
 class AdvancedSolarLogCoordinator(DataUpdateCoordinator[AdvancedSolarLogData]):
-    """Pollt /api/status, /api/sysinfo und /api/alarms in einem Durchlauf."""
+    """Fetches the main values every cycle, and the protected ones if available."""
 
     def __init__(
         self,
@@ -49,6 +111,7 @@ class AdvancedSolarLogCoordinator(DataUpdateCoordinator[AdvancedSolarLogData]):
         entry: ConfigEntry,
         client: AdvancedSolarLogClient,
         poll_interval: int,
+        extended_data: bool,
     ) -> None:
         super().__init__(
             hass,
@@ -58,16 +121,56 @@ class AdvancedSolarLogCoordinator(DataUpdateCoordinator[AdvancedSolarLogData]):
             update_interval=timedelta(seconds=poll_interval),
         )
         self.client = client
+        self.extended_data = extended_data
+        self._inverter_names: dict[int, str] = {}
 
     async def _async_update_data(self) -> AdvancedSolarLogData:
         try:
-            status = await self.client.async_get_status()
-            sysinfo = await self.client.async_get_sysinfo()
-            alarms = await self.client.async_get_alarms()
+            values = await self.client.async_get_basic_data()
+            data = AdvancedSolarLogData(values=values)
+            data.last_updated = _as_local(values.get(FIELD_LAST_UPDATED))
+
+            if self.extended_data:
+                await self._async_update_extended(data)
         except AdvancedSolarLogAuthError as err:
-            # Einheitliches 401 {"ok":false,"auth":false} auf allen Routen.
             raise ConfigEntryAuthFailed(str(err)) from err
         except AdvancedSolarLogError as err:
             raise UpdateFailed(str(err)) from err
 
-        return AdvancedSolarLogData(status=status, sysinfo=sysinfo, alarms=alarms)
+        return data
+
+    async def _async_update_extended(self, data: AdvancedSolarLogData) -> None:
+        """Add the values that need a session: battery, yearly totals, inverters.
+
+        A failure here must not take the main values down with it, so anything
+        other than an auth problem is logged and skipped.
+        """
+        try:
+            data.battery = await self.client.async_get_battery()
+            data.energy = await self.client.async_get_energy()
+
+            if not self._inverter_names:
+                self._inverter_names = await self.client.async_get_device_list()
+
+            power = await self.client.async_get_inverter_power()
+            energy = await self.client.async_get_inverter_energy()
+            data.inverters = {
+                index: InverterData(
+                    name=name,
+                    power=power.get(index),
+                    yield_year=energy.get(index),
+                )
+                for index, name in self._inverter_names.items()
+            }
+        except AdvancedSolarLogAuthError:
+            raise
+        except AdvancedSolarLogError as err:
+            _LOGGER.debug("Extended Solar-Log data unavailable this cycle: %s", err)
+
+
+def _as_local(value: Any) -> datetime | None:
+    """Solar-Log sends local time without a zone; attach Home Assistant's."""
+    parsed = parse_timestamp(value)
+    if parsed is None:
+        return None
+    return parsed.replace(tzinfo=dt_util.get_default_time_zone())

@@ -1,39 +1,39 @@
-# Beispiel-Dashboard für Advanced Solar-Log
+# Example dashboard for Advanced Solar-Log
 #
-# Einfügen über: Dashboard → Stift oben rechts → ⋮ → "Raw-Konfigurationseditor"
+# Add via: Dashboard → pencil, top right → ⋮ → "Edit in YAML"
 #
-# Die Entity-IDs unten gehen davon aus, dass die Integration einmal eingerichtet
-# ist und das Gerät "Advanced Solar-Log" heisst. Weichen sie bei dir ab, zeigt
-# der Entitäten-Wähler in der Oberfläche die tatsächlichen Namen.
+# The entity IDs below assume the integration has been set up once and the
+# device is named "Advanced Solar-Log". If yours differ, the entity picker in
+# the UI shows the actual names.
 
 views:
   - title: Solar
     path: solar
     cards:
-      # --- Energiefluss, eingebaute Karte -------------------------------
-      # Zeigt die Flussgrafik aus dem Energie-Dashboard. Setzt voraus, dass
-      # unter Einstellungen → Dashboards → Energie die Zähler dieser
-      # Integration eingetragen sind (Produktion/Bezug/Einspeisung heute).
+      # --- Energy flow, built-in card ------------------------------------
+      # Shows the flow graphic from the Energy dashboard. Needs the counters
+      # from this integration entered under Settings → Dashboards → Energy
+      # (production/grid consumption/return to grid today).
       - type: energy-distribution
         link_dashboard: true
 
-      # --- Momentanwerte ------------------------------------------------
+      # --- Current values --------------------------------------------------
       - type: glance
-        title: Jetzt
+        title: Now
         columns: 4
         entities:
-          - entity: sensor.advanced_solar_log_produktion
-            name: Produktion
-          - entity: sensor.advanced_solar_log_verbrauch
-            name: Verbrauch
-          - entity: sensor.advanced_solar_log_netzleistung
-            name: Netz
-          - entity: sensor.advanced_solar_log_batterieleistung
-            name: Batterie
+          - entity: sensor.advanced_solar_log_production
+            name: Production
+          - entity: sensor.advanced_solar_log_consumption
+            name: Consumption
+          - entity: sensor.advanced_solar_log_grid
+            name: Grid
+          - entity: sensor.advanced_solar_log_battery_power
+            name: Battery
 
       - type: gauge
-        entity: sensor.advanced_solar_log_batterie_ladestand
-        name: Batterie
+        entity: sensor.advanced_solar_log_battery_level
+        name: Battery
         min: 0
         max: 100
         severity:
@@ -41,57 +41,50 @@ views:
           yellow: 20
           red: 0
 
-      # --- Tagesbilanz --------------------------------------------------
+      # --- Today's totals ----------------------------------------------
       - type: entities
-        title: Heute
+        title: Today
         entities:
-          - sensor.advanced_solar_log_produktion_heute
-          - sensor.advanced_solar_log_verbrauch_heute
-          - sensor.advanced_solar_log_netzbezug_heute
-          - sensor.advanced_solar_log_einspeisung_heute
-          - type: divider
-          - sensor.advanced_solar_log_bezugskosten_heute
-          - sensor.advanced_solar_log_einspeiseerloes_heute
-          - sensor.advanced_solar_log_eigenverbrauchswert_heute
+          - sensor.advanced_solar_log_yield_today
+          - sensor.advanced_solar_log_consumption_today
 
-      # --- Verlauf ------------------------------------------------------
+      # --- History ------------------------------------------------------
       - type: history-graph
-        title: Verlauf
+        title: History
         hours_to_show: 24
         entities:
-          - sensor.advanced_solar_log_produktion
-          - sensor.advanced_solar_log_verbrauch
-          - sensor.advanced_solar_log_netzleistung
+          - sensor.advanced_solar_log_production
+          - sensor.advanced_solar_log_consumption
+          - sensor.advanced_solar_log_grid
 
-      # --- Anlagenzustand -----------------------------------------------
+      # --- Device state ---------------------------------------------------
       - type: entities
-        title: Zustand
+        title: State
         entities:
-          - binary_sensor.advanced_solar_log_alarm
-          - binary_sensor.advanced_solar_log_fail_safe_aktiv
-          - sensor.advanced_solar_log_letzte_solar_log_abfrage
+          - sensor.advanced_solar_log_last_updated
+          - sensor.advanced_solar_log_installed_peak_power
 
 # ---------------------------------------------------------------------------
 # Alternative: Power Flow Card Plus
 #
-# Kommt der Live-Flussanzeige der Geräte-App optisch am nächsten, ist aber
-# keine eingebaute Karte — über HACS installieren (Frontend → "Power Flow
-# Card Plus"). Danach diese Karte einsetzen:
+# Gets closest to the Solar-Log's own live flow display, but is not a
+# built-in card -- install it via HACS (Frontend → "Power Flow Card Plus").
+# Then use this card:
 #
 #   type: custom:power-flow-card-plus
 #   entities:
 #     grid:
-#       entity: sensor.advanced_solar_log_netzleistung
+#       entity: sensor.advanced_solar_log_grid
 #     solar:
-#       entity: sensor.advanced_solar_log_produktion
+#       entity: sensor.advanced_solar_log_production
 #     battery:
-#       entity: sensor.advanced_solar_log_batterieleistung
-#       state_of_charge: sensor.advanced_solar_log_batterie_ladestand
+#       entity: sensor.advanced_solar_log_battery_power
+#       state_of_charge: sensor.advanced_solar_log_battery_level
 #     home:
-#       entity: sensor.advanced_solar_log_verbrauch
+#       entity: sensor.advanced_solar_log_consumption
 #
-# Vorzeichen prüfen: diese Integration meldet beim Netz positiv = Bezug und
-# negativ = Einspeisung, bei der Batterie positiv = laden und negativ =
-# entladen. Zeigt die Karte den Batteriefluss verkehrt herum, lässt sich das
-# über "inverted_animation" bzw. die getrennte Angabe von consumption und
-# production in der Kartenkonfiguration drehen.
+# Check the signs: this integration reports grid positive = import and
+# negative = feed-in, and battery positive = charging and negative =
+# discharging. If the card shows the battery flow backwards, flip it with
+# "inverted_animation" or by giving consumption and production separately in
+# the card configuration.

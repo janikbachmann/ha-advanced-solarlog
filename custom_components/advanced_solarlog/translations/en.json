@@ -2,163 +2,70 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect Advanced Solar-Log",
-        "description": "Hostname or IP of the device. The password is the device's web password (the username is always 'admin'). Leave it empty if no password is set on the device.",
+        "title": "Connect Solar-Log",
+        "description": "Enter the host name or IP address of your Solar-Log. The password is the one for the device's own web interface; without it the battery and per-inverter values stay unavailable on most firmware.",
         "data": {
           "host": "Host",
           "port": "Port",
-          "password": "Web password"
+          "password": "Password"
         }
       },
       "reauth_confirm": {
-        "title": "Re-enter password",
-        "description": "The device rejected the stored credentials.",
+        "title": "Solar-Log password",
+        "description": "The Solar-Log no longer accepts the stored password.",
         "data": {
-          "password": "Web password"
+          "password": "Password"
         }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to the device.",
-      "invalid_auth": "The password was rejected."
+      "cannot_connect": "No Solar-Log answered at this address. Check the host and that the JSON interface is enabled on the device.",
+      "invalid_auth": "The Solar-Log rejected this password."
     },
     "abort": {
-      "already_configured": "This device is already set up.",
-      "reauth_successful": "Credentials updated."
+      "already_configured": "This Solar-Log is already set up.",
+      "reauth_successful": "Reconnected."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Polling interval",
+        "title": "Options",
         "data": {
-          "poll_interval": "Polling interval (seconds)"
+          "poll_interval": "Poll interval (seconds)",
+          "extended_data": "Read battery, yearly totals and per-inverter values"
         }
       }
     }
   },
   "entity": {
     "sensor": {
-      "production": {
-        "name": "Production"
-      },
-      "consumption": {
-        "name": "Consumption"
-      },
-      "grid_power": {
-        "name": "Grid power"
-      },
-      "battery_power": {
-        "name": "Battery power"
-      },
-      "battery_soc": {
-        "name": "Battery level"
-      },
-      "production_today": {
-        "name": "Production today"
-      },
-      "consumption_today": {
-        "name": "Consumption today"
-      },
-      "grid_import_today": {
-        "name": "Grid import today"
-      },
-      "grid_export_today": {
-        "name": "Grid export today"
-      },
-      "production_total": {
-        "name": "Production total"
-      },
-      "consumption_total": {
-        "name": "Consumption total"
-      },
-      "grid_import_total": {
-        "name": "Grid import total"
-      },
-      "grid_export_total": {
-        "name": "Grid export total"
-      },
-      "cost_import_today": {
-        "name": "Import cost today"
-      },
-      "cost_export_today": {
-        "name": "Export revenue today"
-      },
-      "cost_saved_today": {
-        "name": "Self-consumption value today"
-      },
-      "cost_base_today": {
-        "name": "Base fee today"
-      },
-      "solarlog_age": {
-        "name": "Last Solar-Log poll"
-      },
-      "solarlog_next": {
-        "name": "Next Solar-Log poll"
-      },
-      "active_alarms": {
-        "name": "Open alarms"
-      },
-      "alarm_severity": {
-        "name": "Alarm severity",
-        "state": {
-          "none": "None",
-          "info": "Info",
-          "warn": "Warning",
-          "crit": "Critical"
-        }
-      },
-      "led_state": {
-        "name": "Status LED",
-        "state": {
-          "off": "Off",
-          "wifi_connecting": "Wi-Fi connecting",
-          "connected": "Connected",
-          "disconnected": "Disconnected",
-          "scan": "Scanning"
-        }
-      },
-      "uptime": {
-        "name": "Uptime"
-      },
-      "chip_temperature": {
-        "name": "Chip temperature"
-      },
-      "heap_free": {
-        "name": "Free memory"
-      },
-      "crashes": {
-        "name": "Crashes"
-      },
-      "reset_reason": {
-        "name": "Last reset reason"
-      },
-      "firmware_build": {
-        "name": "Firmware build"
-      }
-    },
-    "binary_sensor": {
-      "failsafe": {
-        "name": "Fail-safe active"
-      },
-      "battery_priority_blocking": {
-        "name": "Battery priority blocking"
-      },
-      "alarm": {
-        "name": "Alarm"
-      },
-      "mqtt_connected": {
-        "name": "MQTT connected"
-      },
-      "ethernet": {
-        "name": "Ethernet"
-      },
-      "nvs_error": {
-        "name": "NVS error"
-      },
-      "coredump": {
-        "name": "Core dump present"
-      }
+      "power_ac": { "name": "Production" },
+      "power_dc": { "name": "Production DC" },
+      "consumption_ac": { "name": "Consumption" },
+      "grid_power": { "name": "Grid" },
+      "voltage_ac": { "name": "Voltage AC" },
+      "voltage_dc": { "name": "Voltage DC" },
+      "battery_level": { "name": "Battery level" },
+      "battery_power": { "name": "Battery power" },
+      "battery_charge_power": { "name": "Battery charge power" },
+      "battery_discharge_power": { "name": "Battery discharge power" },
+      "battery_voltage": { "name": "Battery voltage" },
+      "yield_day": { "name": "Yield today" },
+      "yield_yesterday": { "name": "Yield yesterday" },
+      "yield_month": { "name": "Yield this month" },
+      "yield_year": { "name": "Yield this year" },
+      "yield_total": { "name": "Yield total" },
+      "consumption_day": { "name": "Consumption today" },
+      "consumption_yesterday": { "name": "Consumption yesterday" },
+      "consumption_month": { "name": "Consumption this month" },
+      "consumption_year": { "name": "Consumption this year" },
+      "consumption_total": { "name": "Consumption total" },
+      "self_consumption_year": { "name": "Self-consumption this year" },
+      "last_updated": { "name": "Last updated" },
+      "installed_power": { "name": "Installed peak power" },
+      "inverter_power": { "name": "Power" },
+      "inverter_yield_year": { "name": "Yield this year" }
     }
   }
 }

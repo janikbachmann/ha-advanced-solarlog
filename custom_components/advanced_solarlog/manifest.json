@@ -1,14 +1,12 @@
 {
   "domain": "advanced_solarlog",
   "name": "Advanced Solar-Log",
-  "codeowners": [
-    "@janikbachmann"
-  ],
+  "codeowners": ["@janikbachmann"],
   "config_flow": true,
   "documentation": "https://github.com/janikbachmann/ha-advanced-solarlog",
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/janikbachmann/ha-advanced-solarlog/issues",
-  "requirements": [],
+  "requirements": ["bcrypt>=4.0.1"],
   "version": "0.1.0"
 }

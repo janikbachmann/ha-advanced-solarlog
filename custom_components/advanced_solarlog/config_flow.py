@@ -1,4 +1,4 @@
-"""Config-Flow fuer die EnergyOptimizer-Integration."""
+"""Config flow for the Advanced Solar-Log integration."""
 
 from __future__ import annotations
 
@@ -13,11 +13,12 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import AdvancedSolarLogAuthError, AdvancedSolarLogClient, AdvancedSolarLogError
 from .const import (
+    CONF_EXTENDED_DATA,
     CONF_POLL_INTERVAL,
     DEFAULT_POLL_INTERVAL,
     DEFAULT_PORT,
@@ -28,34 +29,43 @@ from .const import (
 
 STEP_USER_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_HOST, default="energyoptimizer.local"): str,
+        vol.Required(CONF_HOST): str,
         vol.Optional(CONF_PORT, default=DEFAULT_PORT): vol.Coerce(int),
         vol.Optional(CONF_PASSWORD, default=""): str,
     }
 )
 
 
-async def _async_validate(hass, data: dict[str, Any]) -> dict[str, Any]:
-    """Verbindung pruefen und Geraetenamen ermitteln."""
+async def _async_validate(hass: HomeAssistant, data: dict[str, Any]) -> bool:
+    """Check the host answers, and report whether the protected values are readable.
+
+    Returns True when battery, yearly totals and per-inverter values can be
+    fetched. That needs the Solar-Log user password on most firmware.
+    """
     client = AdvancedSolarLogClient(
         async_get_clientsession(hass),
         host=data[CONF_HOST],
         port=data.get(CONF_PORT, DEFAULT_PORT),
         password=data.get(CONF_PASSWORD) or None,
     )
-    status = await client.async_get_status()
-    return status
+    if not await client.async_test_connection():
+        raise AdvancedSolarLogError("Host did not answer like a Solar-Log")
+
+    if data.get(CONF_PASSWORD):
+        await client.async_login()
+
+    return await client.async_test_extended_data()
 
 
 class AdvancedSolarLogConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Fuehrt den Nutzer durch Host/Passwort."""
+    """Asks for the Solar-Log host and, if set, its password."""
 
     VERSION = 1
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Erster und einziger Einrichtungsschritt."""
+        """The only setup step."""
         errors: dict[str, str] = {}
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
@@ -63,7 +73,7 @@ class AdvancedSolarLogConfigFlow(ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(host.lower())
             self._abort_if_unique_id_configured()
             try:
-                await _async_validate(self.hass, user_input)
+                extended_data = await _async_validate(self.hass, user_input)
             except AdvancedSolarLogAuthError:
                 errors["base"] = "invalid_auth"
             except AdvancedSolarLogError:
@@ -71,31 +81,32 @@ class AdvancedSolarLogConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 if not user_input.get(CONF_PASSWORD):
                     user_input.pop(CONF_PASSWORD, None)
-                # Kurzer Titel: er wird zum Geraetenamen und steckt damit in jeder
-                # Entity-ID. Welches Geraet gemeint ist, zeigt die Geraeteseite
-                # ueber configuration_url.
-                return self.async_create_entry(title="Advanced Solar-Log", data=user_input)
+                user_input[CONF_EXTENDED_DATA] = extended_data
+                # Short title: it becomes the device name and therefore part of
+                # every entity ID. Which device is meant is shown on the device
+                # page through its configuration_url.
+                return self.async_create_entry(
+                    title="Advanced Solar-Log", data=user_input
+                )
 
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_SCHEMA, errors=errors
         )
 
-    async def async_step_reauth(
-        self, entry_data: dict[str, Any]
-    ) -> ConfigFlowResult:
-        """Wird ausgeloest, wenn das Geraet 401 liefert."""
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
+        """Triggered when the Solar-Log stops accepting the stored password."""
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Nur das Web-Passwort neu abfragen."""
+        """Ask for the device password again."""
         errors: dict[str, str] = {}
         entry = self._get_reauth_entry()
         if user_input is not None:
             data = {**entry.data, CONF_PASSWORD: user_input[CONF_PASSWORD]}
             try:
-                await _async_validate(self.hass, data)
+                data[CONF_EXTENDED_DATA] = await _async_validate(self.hass, data)
             except AdvancedSolarLogAuthError:
                 errors["base"] = "invalid_auth"
             except AdvancedSolarLogError:
@@ -112,29 +123,38 @@ class AdvancedSolarLogConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        """Optionen (Poll-Intervall)."""
+        """Options: poll interval and the protected values."""
         return AdvancedSolarLogOptionsFlow()
 
 
 class AdvancedSolarLogOptionsFlow(OptionsFlow):
-    """Erlaubt das Anpassen des Poll-Intervalls."""
+    """Lets the poll interval and the extended values be changed later."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Einziger Optionsschritt."""
+        """The only options step."""
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
-        current = self.config_entry.options.get(
-            CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL
-        )
+        entry = self.config_entry
         schema = vol.Schema(
             {
-                vol.Optional(CONF_POLL_INTERVAL, default=current): vol.All(
+                vol.Optional(
+                    CONF_POLL_INTERVAL,
+                    default=entry.options.get(
+                        CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL
+                    ),
+                ): vol.All(
                     vol.Coerce(int),
                     vol.Range(min=MIN_POLL_INTERVAL, max=MAX_POLL_INTERVAL),
-                )
+                ),
+                vol.Optional(
+                    CONF_EXTENDED_DATA,
+                    default=entry.options.get(
+                        CONF_EXTENDED_DATA, entry.data.get(CONF_EXTENDED_DATA, False)
+                    ),
+                ): bool,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
