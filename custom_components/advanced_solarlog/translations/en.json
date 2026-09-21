@@ -1,0 +1,164 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect Advanced Solar-Log",
+        "description": "Hostname or IP of the device. The password is the device's web password (the username is always 'admin'). Leave it empty if no password is set on the device.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "password": "Web password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-enter password",
+        "description": "The device rejected the stored credentials.",
+        "data": {
+          "password": "Web password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the device.",
+      "invalid_auth": "The password was rejected."
+    },
+    "abort": {
+      "already_configured": "This device is already set up.",
+      "reauth_successful": "Credentials updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Polling interval",
+        "data": {
+          "poll_interval": "Polling interval (seconds)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "production": {
+        "name": "Production"
+      },
+      "consumption": {
+        "name": "Consumption"
+      },
+      "grid_power": {
+        "name": "Grid power"
+      },
+      "battery_power": {
+        "name": "Battery power"
+      },
+      "battery_soc": {
+        "name": "Battery level"
+      },
+      "production_today": {
+        "name": "Production today"
+      },
+      "consumption_today": {
+        "name": "Consumption today"
+      },
+      "grid_import_today": {
+        "name": "Grid import today"
+      },
+      "grid_export_today": {
+        "name": "Grid export today"
+      },
+      "production_total": {
+        "name": "Production total"
+      },
+      "consumption_total": {
+        "name": "Consumption total"
+      },
+      "grid_import_total": {
+        "name": "Grid import total"
+      },
+      "grid_export_total": {
+        "name": "Grid export total"
+      },
+      "cost_import_today": {
+        "name": "Import cost today"
+      },
+      "cost_export_today": {
+        "name": "Export revenue today"
+      },
+      "cost_saved_today": {
+        "name": "Self-consumption value today"
+      },
+      "cost_base_today": {
+        "name": "Base fee today"
+      },
+      "solarlog_age": {
+        "name": "Last Solar-Log poll"
+      },
+      "solarlog_next": {
+        "name": "Next Solar-Log poll"
+      },
+      "active_alarms": {
+        "name": "Open alarms"
+      },
+      "alarm_severity": {
+        "name": "Alarm severity",
+        "state": {
+          "none": "None",
+          "info": "Info",
+          "warn": "Warning",
+          "crit": "Critical"
+        }
+      },
+      "led_state": {
+        "name": "Status LED",
+        "state": {
+          "off": "Off",
+          "wifi_connecting": "Wi-Fi connecting",
+          "connected": "Connected",
+          "disconnected": "Disconnected",
+          "scan": "Scanning"
+        }
+      },
+      "uptime": {
+        "name": "Uptime"
+      },
+      "chip_temperature": {
+        "name": "Chip temperature"
+      },
+      "heap_free": {
+        "name": "Free memory"
+      },
+      "crashes": {
+        "name": "Crashes"
+      },
+      "reset_reason": {
+        "name": "Last reset reason"
+      },
+      "firmware_build": {
+        "name": "Firmware build"
+      }
+    },
+    "binary_sensor": {
+      "failsafe": {
+        "name": "Fail-safe active"
+      },
+      "battery_priority_blocking": {
+        "name": "Battery priority blocking"
+      },
+      "alarm": {
+        "name": "Alarm"
+      },
+      "mqtt_connected": {
+        "name": "MQTT connected"
+      },
+      "ethernet": {
+        "name": "Ethernet"
+      },
+      "nvs_error": {
+        "name": "NVS error"
+      },
+      "coredump": {
+        "name": "Core dump present"
+      }
+    }
+  }
+}
