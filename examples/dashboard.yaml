@@ -1,0 +1,97 @@
+# Beispiel-Dashboard für Advanced Solar-Log
+#
+# Einfügen über: Dashboard → Stift oben rechts → ⋮ → "Raw-Konfigurationseditor"
+#
+# Die Entity-IDs unten gehen davon aus, dass die Integration einmal eingerichtet
+# ist und das Gerät "Advanced Solar-Log" heisst. Weichen sie bei dir ab, zeigt
+# der Entitäten-Wähler in der Oberfläche die tatsächlichen Namen.
+
+views:
+  - title: Solar
+    path: solar
+    cards:
+      # --- Energiefluss, eingebaute Karte -------------------------------
+      # Zeigt die Flussgrafik aus dem Energie-Dashboard. Setzt voraus, dass
+      # unter Einstellungen → Dashboards → Energie die Zähler dieser
+      # Integration eingetragen sind (Produktion/Bezug/Einspeisung heute).
+      - type: energy-distribution
+        link_dashboard: true
+
+      # --- Momentanwerte ------------------------------------------------
+      - type: glance
+        title: Jetzt
+        columns: 4
+        entities:
+          - entity: sensor.advanced_solar_log_produktion
+            name: Produktion
+          - entity: sensor.advanced_solar_log_verbrauch
+            name: Verbrauch
+          - entity: sensor.advanced_solar_log_netzleistung
+            name: Netz
+          - entity: sensor.advanced_solar_log_batterieleistung
+            name: Batterie
+
+      - type: gauge
+        entity: sensor.advanced_solar_log_batterie_ladestand
+        name: Batterie
+        min: 0
+        max: 100
+        severity:
+          green: 50
+          yellow: 20
+          red: 0
+
+      # --- Tagesbilanz --------------------------------------------------
+      - type: entities
+        title: Heute
+        entities:
+          - sensor.advanced_solar_log_produktion_heute
+          - sensor.advanced_solar_log_verbrauch_heute
+          - sensor.advanced_solar_log_netzbezug_heute
+          - sensor.advanced_solar_log_einspeisung_heute
+          - type: divider
+          - sensor.advanced_solar_log_bezugskosten_heute
+          - sensor.advanced_solar_log_einspeiseerloes_heute
+          - sensor.advanced_solar_log_eigenverbrauchswert_heute
+
+      # --- Verlauf ------------------------------------------------------
+      - type: history-graph
+        title: Verlauf
+        hours_to_show: 24
+        entities:
+          - sensor.advanced_solar_log_produktion
+          - sensor.advanced_solar_log_verbrauch
+          - sensor.advanced_solar_log_netzleistung
+
+      # --- Anlagenzustand -----------------------------------------------
+      - type: entities
+        title: Zustand
+        entities:
+          - binary_sensor.advanced_solar_log_alarm
+          - binary_sensor.advanced_solar_log_fail_safe_aktiv
+          - sensor.advanced_solar_log_letzte_solar_log_abfrage
+
+# ---------------------------------------------------------------------------
+# Alternative: Power Flow Card Plus
+#
+# Kommt der Live-Flussanzeige der Geräte-App optisch am nächsten, ist aber
+# keine eingebaute Karte — über HACS installieren (Frontend → "Power Flow
+# Card Plus"). Danach diese Karte einsetzen:
+#
+#   type: custom:power-flow-card-plus
+#   entities:
+#     grid:
+#       entity: sensor.advanced_solar_log_netzleistung
+#     solar:
+#       entity: sensor.advanced_solar_log_produktion
+#     battery:
+#       entity: sensor.advanced_solar_log_batterieleistung
+#       state_of_charge: sensor.advanced_solar_log_batterie_ladestand
+#     home:
+#       entity: sensor.advanced_solar_log_verbrauch
+#
+# Vorzeichen prüfen: diese Integration meldet beim Netz positiv = Bezug und
+# negativ = Einspeisung, bei der Batterie positiv = laden und negativ =
+# entladen. Zeigt die Karte den Batteriefluss verkehrt herum, lässt sich das
+# über "inverted_animation" bzw. die getrennte Angabe von consumption und
+# production in der Kartenkonfiguration drehen.

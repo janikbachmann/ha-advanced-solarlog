@@ -1,0 +1,164 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Advanced Solar-Log verbinden",
+        "description": "Hostname oder IP des Geraets. Das Passwort ist das Web-Passwort des Geraets (Benutzername ist fest 'admin'). Ist auf dem Geraet kein Passwort gesetzt, kann das Feld leer bleiben.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "password": "Web-Passwort"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Passwort erneut eingeben",
+        "description": "Das Geraet hat die gespeicherten Zugangsdaten abgelehnt.",
+        "data": {
+          "password": "Web-Passwort"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum Geraet fehlgeschlagen.",
+      "invalid_auth": "Passwort wurde abgelehnt."
+    },
+    "abort": {
+      "already_configured": "Dieses Geraet ist bereits eingerichtet.",
+      "reauth_successful": "Zugangsdaten aktualisiert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Abfrageintervall",
+        "data": {
+          "poll_interval": "Abfrageintervall (Sekunden)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "production": {
+        "name": "Produktion"
+      },
+      "consumption": {
+        "name": "Verbrauch"
+      },
+      "grid_power": {
+        "name": "Netzleistung"
+      },
+      "battery_power": {
+        "name": "Batterieleistung"
+      },
+      "battery_soc": {
+        "name": "Batterie-Ladestand"
+      },
+      "production_today": {
+        "name": "Produktion heute"
+      },
+      "consumption_today": {
+        "name": "Verbrauch heute"
+      },
+      "grid_import_today": {
+        "name": "Netzbezug heute"
+      },
+      "grid_export_today": {
+        "name": "Einspeisung heute"
+      },
+      "production_total": {
+        "name": "Produktion gesamt"
+      },
+      "consumption_total": {
+        "name": "Verbrauch gesamt"
+      },
+      "grid_import_total": {
+        "name": "Netzbezug gesamt"
+      },
+      "grid_export_total": {
+        "name": "Einspeisung gesamt"
+      },
+      "cost_import_today": {
+        "name": "Bezugskosten heute"
+      },
+      "cost_export_today": {
+        "name": "Einspeiseerloes heute"
+      },
+      "cost_saved_today": {
+        "name": "Eigenverbrauchswert heute"
+      },
+      "cost_base_today": {
+        "name": "Grundgebuehr heute"
+      },
+      "solarlog_age": {
+        "name": "Letzte Solar-Log-Abfrage"
+      },
+      "solarlog_next": {
+        "name": "Naechste Solar-Log-Abfrage"
+      },
+      "active_alarms": {
+        "name": "Offene Alarme"
+      },
+      "alarm_severity": {
+        "name": "Alarmschwere",
+        "state": {
+          "none": "Keiner",
+          "info": "Info",
+          "warn": "Warnung",
+          "crit": "Kritisch"
+        }
+      },
+      "led_state": {
+        "name": "Status-LED",
+        "state": {
+          "off": "Aus",
+          "wifi_connecting": "WLAN verbindet",
+          "connected": "Verbunden",
+          "disconnected": "Getrennt",
+          "scan": "Suche"
+        }
+      },
+      "uptime": {
+        "name": "Laufzeit"
+      },
+      "chip_temperature": {
+        "name": "Chip-Temperatur"
+      },
+      "heap_free": {
+        "name": "Freier Speicher"
+      },
+      "crashes": {
+        "name": "Abstuerze"
+      },
+      "reset_reason": {
+        "name": "Letzter Neustartgrund"
+      },
+      "firmware_build": {
+        "name": "Firmware-Build"
+      }
+    },
+    "binary_sensor": {
+      "failsafe": {
+        "name": "Fail-Safe aktiv"
+      },
+      "battery_priority_blocking": {
+        "name": "Batterie-Vorrang blockiert"
+      },
+      "alarm": {
+        "name": "Alarm"
+      },
+      "mqtt_connected": {
+        "name": "MQTT verbunden"
+      },
+      "ethernet": {
+        "name": "Ethernet"
+      },
+      "nvs_error": {
+        "name": "NVS-Fehler"
+      },
+      "coredump": {
+        "name": "Absturzabbild vorhanden"
+      }
+    }
+  }
+}
