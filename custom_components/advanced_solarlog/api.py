@@ -192,19 +192,30 @@ class AdvancedSolarLogClient:
         return text, response
 
     def _remember_session(self, response: aiohttp.ClientResponse) -> None:
-        """Capture the session token straight from the login response's cookie.
+        """Make sure the session cookie survives on an IP-address host too.
 
         Home Assistant's shared HTTP session uses aiohttp's default cookie
         jar, which silently drops cookies for bare IP-address hosts -- common
-        for a local device like this one, and exactly reproducible with a
-        default aiohttp.CookieJar() against an IP host. Reading the cookie
-        directly off this response (unaffected by the jar's own storage
-        policy) and repeating it as `token=...` in every later request body,
-        the way the device's own web UI does, works regardless of whether the
-        host is a hostname or a bare IP.
+        for a local device like this one. Calling `update_cookies()` without
+        a response URL stores the cookie with no host restriction at all, so
+        aiohttp attaches it to every request from this session regardless of
+        host -- the jar's `unsafe`/IP check only ever looks at the URL that
+        is passed in, and an empty one has none. This is the same workaround
+        `solarlog_cli` (the reference client this integration is modelled
+        on) uses.
+
+        Some older firmware doesn't honour the cookie at all, even once it's
+        present, and instead expects the session token repeated in the
+        request body -- so that fallback is kept too, but only for the
+        plain-password login path. `solarlog_cli` restricts it the same
+        way, which suggests hashed-password (newer) firmware does not
+        expect that prefix and may reject a request body that carries it.
         """
         cookie = response.cookies.get("SolarLog")
-        if cookie:
+        if not cookie:
+            return
+        self._session.cookie_jar.update_cookies({"SolarLog": cookie.value})
+        if not self._hashed_password:
             self._token = cookie.value
 
     async def async_test_connection(self) -> bool:
