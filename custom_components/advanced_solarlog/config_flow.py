@@ -14,6 +14,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import AdvancedSolarLogAuthError, AdvancedSolarLogClient, AdvancedSolarLogError
@@ -27,11 +28,15 @@ from .const import (
     MIN_POLL_INTERVAL,
 )
 
+PASSWORD_SELECTOR = selector.TextSelector(
+    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+)
+
 STEP_USER_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Optional(CONF_PORT, default=DEFAULT_PORT): vol.Coerce(int),
-        vol.Optional(CONF_PASSWORD, default=""): str,
+        vol.Optional(CONF_PASSWORD, default=""): PASSWORD_SELECTOR,
     }
 )
 
@@ -93,6 +98,46 @@ class AdvancedSolarLogConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user", data_schema=STEP_USER_SCHEMA, errors=errors
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Let the host, port and password be changed after setup.
+
+        The unique ID is the host itself, so changing it is not a mismatch to
+        guard against here (unlike reauth) -- it is the point of this step,
+        e.g. after the Solar-Log gets a new IP address.
+        """
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            host = user_input[CONF_HOST].strip()
+            data = {**user_input, CONF_HOST: host}
+            if not data.get(CONF_PASSWORD):
+                data.pop(CONF_PASSWORD, None)
+
+            other_entry = await self.async_set_unique_id(host.lower())
+            if other_entry is not None and other_entry.entry_id != entry.entry_id:
+                errors["base"] = "already_configured"
+            else:
+                try:
+                    data[CONF_EXTENDED_DATA] = await _async_validate(self.hass, data)
+                except AdvancedSolarLogAuthError:
+                    errors["base"] = "invalid_auth"
+                except AdvancedSolarLogError:
+                    errors["base"] = "cannot_connect"
+                else:
+                    return self.async_update_reload_and_abort(
+                        entry, unique_id=host.lower(), data=data
+                    )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(
+                STEP_USER_SCHEMA, entry.data
+            ),
+            errors=errors,
+        )
+
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
         """Triggered when the Solar-Log stops accepting the stored password."""
         return await self.async_step_reauth_confirm()
@@ -116,7 +161,7 @@ class AdvancedSolarLogConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
+            data_schema=vol.Schema({vol.Required(CONF_PASSWORD): PASSWORD_SELECTOR}),
             errors=errors,
         )
 

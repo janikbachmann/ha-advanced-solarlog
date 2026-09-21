@@ -63,13 +63,172 @@ bs.BinarySensorEntity = type("BinarySensorEntity", (), {})
 bs.BinarySensorEntityDescription = _Desc
 bs.BinarySensorDeviceClass = _enum("BinarySensorDeviceClass", ["PROBLEM", "CONNECTIVITY"])
 
-ce = _mod("homeassistant.config_entries")
-ce.ConfigEntry = type("ConfigEntry", (), {})
 core = _mod("homeassistant.core")
 core.HomeAssistant = type("HomeAssistant", (), {})
 core.callback = lambda f: f
 ep = _mod("homeassistant.helpers.entity_platform")
 ep.AddEntitiesCallback = object
+ahc = _mod("homeassistant.helpers.aiohttp_client")
+ahc.async_get_clientsession = lambda hass: None
+
+# --- config_entries / data_entry_flow: enough of the real machinery to
+# exercise our config_flow.py's control flow (unique_id handling, entry
+# updates, abort-vs-error) against the semantics verified in HA core's
+# actual source, without pulling in the real flow manager. ---
+UNDEFINED = object()
+
+def _mod_data_entry_flow():
+    m = _mod("homeassistant.data_entry_flow")
+
+    class AbortFlow(Exception):
+        def __init__(self, reason, description_placeholders=None):
+            super().__init__(reason)
+            self.reason = reason
+
+    m.AbortFlow = AbortFlow
+    return m
+
+_def = _mod_data_entry_flow()
+
+
+class _FakeConfigEntry:
+    def __init__(self, entry_id, unique_id, data, options=None, title=""):
+        self.entry_id = entry_id
+        self.unique_id = unique_id
+        self.data = dict(data)
+        self.options = dict(options or {})
+        self.title = title
+        self.state = "loaded"
+
+
+class _FakeConfigEntries:
+    """Stand-in for hass.config_entries: a domain-scoped entry registry."""
+
+    def __init__(self):
+        self._entries: dict[str, _FakeConfigEntry] = {}
+        self.reloaded: list[str] = []
+
+    def add(self, entry):
+        self._entries[entry.entry_id] = entry
+
+    def async_entry_for_domain_unique_id(self, domain, unique_id):
+        for entry in self._entries.values():
+            if entry.unique_id == unique_id:
+                return entry
+        return None
+
+    def async_update_entry(self, entry, *, data=None, unique_id=UNDEFINED):
+        if data is not None:
+            entry.data = dict(data)
+        if unique_id is not UNDEFINED:
+            entry.unique_id = unique_id
+
+    def async_schedule_reload(self, entry_id):
+        self.reloaded.append(entry_id)
+
+
+class ConfigFlow:
+    """Mirrors the subset of homeassistant.config_entries.ConfigFlow that
+    custom_components/advanced_solarlog/config_flow.py actually calls,
+    matching the semantics read from HA core's real config_entries.py."""
+
+    def __init_subclass__(cls, *, domain=None, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls._domain = domain
+
+    def __init__(self):
+        self.hass = None
+        self.context: dict = {}
+        self.handler = self._domain
+
+    @property
+    def source(self):
+        return self.context.get("source")
+
+    @property
+    def unique_id(self):
+        return self.context.get("unique_id")
+
+    async def async_set_unique_id(self, unique_id=None, *, raise_on_progress=True):
+        if unique_id is None:
+            self.context["unique_id"] = None
+            return None
+        self.context["unique_id"] = unique_id
+        return self.hass.config_entries.async_entry_for_domain_unique_id(
+            self.handler, unique_id
+        )
+
+    def _abort_if_unique_id_configured(self, *, error="already_configured", **_kw):
+        if self.unique_id is None:
+            return
+        entry = self.hass.config_entries.async_entry_for_domain_unique_id(
+            self.handler, self.unique_id
+        )
+        if entry is not None:
+            raise _def.AbortFlow(error)
+
+    def _get_reauth_entry(self):
+        return self.hass.config_entries._entries[self.context["entry_id"]]
+
+    def _get_reconfigure_entry(self):
+        return self.hass.config_entries._entries[self.context["entry_id"]]
+
+    def async_update_reload_and_abort(
+        self, entry, *, unique_id=UNDEFINED, data=UNDEFINED, **_kw
+    ):
+        self.hass.config_entries.async_update_entry(
+            entry, data=None if data is UNDEFINED else data, unique_id=unique_id
+        )
+        self.hass.config_entries.async_schedule_reload(entry.entry_id)
+        return {"type": "abort", "reason": "reconfigure_successful"}
+
+    def add_suggested_values_to_schema(self, data_schema, suggested_values):
+        # The real helper only changes what the form pre-fills; our tests
+        # assert on control flow, not on rendered defaults.
+        return data_schema
+
+    def async_show_form(self, *, step_id, data_schema=None, errors=None):
+        return {"type": "form", "step_id": step_id, "errors": errors or {}}
+
+    def async_create_entry(self, *, title=None, data=None):
+        return {"type": "create_entry", "title": title, "data": data}
+
+    def async_abort(self, *, reason, **_kw):
+        return {"type": "abort", "reason": reason}
+
+
+class OptionsFlow:
+    def async_show_form(self, *, step_id, data_schema=None, errors=None):
+        return {"type": "form", "step_id": step_id, "errors": errors or {}}
+
+    def async_create_entry(self, *, data=None):
+        return {"type": "create_entry", "data": data}
+
+
+ce = _mod("homeassistant.config_entries")
+ce.ConfigEntry = type("ConfigEntry", (), {})
+ce.ConfigFlow = ConfigFlow
+ce.OptionsFlow = OptionsFlow
+ce.ConfigFlowResult = dict
+
+sel = _mod("homeassistant.helpers.selector")
+
+class _TextSelectorType(_Str):
+    PASSWORD = "password"
+    TEXT = "text"
+
+class _TextSelector:
+    """Callable like the real selector, so voluptuous accepts it as a validator."""
+
+    def __init__(self, config=None):
+        self.config = config
+
+    def __call__(self, value):
+        return str(value)
+
+sel.TextSelectorType = _TextSelectorType
+sel.TextSelectorConfig = lambda **kw: kw
+sel.TextSelector = _TextSelector
 uc = _mod("homeassistant.helpers.update_coordinator")
 uc.CoordinatorEntity = type("CoordinatorEntity", (), {"__class_getitem__": classmethod(lambda cls, item: cls)})
 uc.DataUpdateCoordinator = type("DataUpdateCoordinator", (), {"__class_getitem__": classmethod(lambda cls, item: cls)})

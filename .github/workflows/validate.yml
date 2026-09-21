@@ -28,6 +28,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install aiohttp bcrypt
+      - run: pip install aiohttp bcrypt voluptuous
       - run: python tests/test_api.py
       - run: python tests/test_entities.py
+      - run: python tests/test_config_flow.py

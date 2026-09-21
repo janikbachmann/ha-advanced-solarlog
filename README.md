@@ -120,7 +120,9 @@ available; battery, self-consumption and per-inverter values sit behind the
 device's login and stay unavailable until a password is set.
 
 The **poll interval** (default 60 seconds) can be changed afterwards under
-*Configure*.
+*Configure*. The **host and password** can be changed afterwards under
+*Devices & services → Advanced Solar-Log → ⋮ → Reconfigure* — useful if the
+device gets a new IP address or you set a password on it later.
 
 ## Dashboard
 
@@ -168,14 +170,16 @@ and its inverters, not Home Assistant.
 
 ## Development
 
-Both smoke tests run without a Home Assistant installation — one against a
-stand-in device server, one checking every sensor description against sample
-data:
+All three smoke tests run without a Home Assistant installation — one against
+a stand-in device server, one checking every sensor description against
+sample data, and one exercising the config flow's setup/reauth/reconfigure
+logic:
 
 ```bash
-pip install aiohttp bcrypt
+pip install aiohttp bcrypt voluptuous
 python3 tests/test_api.py
 python3 tests/test_entities.py
+python3 tests/test_config_flow.py
 ```
 
 CI additionally checks the manifest and translation files against Home
