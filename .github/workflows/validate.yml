@@ -28,6 +28,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install aiohttp
+      - run: pip install aiohttp bcrypt
       - run: python tests/test_api.py
       - run: python tests/test_entities.py

@@ -1,107 +1,187 @@
-"""Smoke-Test: api.py gegen einen nachgebauten EnergyOptimizer-Server.
+"""Smoke test: api.py against a stand-in Solar-Log server.
 
-Aufruf: python3 tests/test_api.py
+Run with: python3 tests/test_api.py
 """
-import asyncio, base64, importlib.util, pathlib, sys, types
-from aiohttp import web, ClientSession
+import asyncio, importlib.util, json, pathlib, sys, types
+from aiohttp import CookieJar, web, ClientSession
 
 ROOT = str(pathlib.Path(__file__).resolve().parent.parent / "custom_components" / "advanced_solarlog")
-pkg = types.ModuleType("eo"); pkg.__path__ = [ROOT]; sys.modules["eo"] = pkg
+pkg = types.ModuleType("asl"); pkg.__path__ = [ROOT]; sys.modules["asl"] = pkg
 for name in ("const", "api"):
-    spec = importlib.util.spec_from_file_location(f"eo.{name}", f"{ROOT}/{name}.py")
-    mod = importlib.util.module_from_spec(spec); sys.modules[f"eo.{name}"] = mod
+    spec = importlib.util.spec_from_file_location(f"asl.{name}", f"{ROOT}/{name}.py")
+    mod = importlib.util.module_from_spec(spec); sys.modules[f"asl.{name}"] = mod
     spec.loader.exec_module(mod)
-api = sys.modules["eo.api"]
+api = sys.modules["asl.api"]
 
 PASSWORD = "geheim"
-STATUS = {"prod": 4210.5, "cons": 1180.0, "grid": -3030.5, "batt": -900.0, "soc": 78.0,
-          "avg_s": 30, "sl_age": 12, "sl_next": 48, "failsafe": False, "battblk": False,
-          "al_n": 1, "al_sev": 1, "led": "connected",
-          "energy": {"dp": 18.4, "dc": 7.1, "dgi": 1.2, "dgo": 11.9,
-                     "tp": 41230.0, "tc": 20110.0, "tgi": 8800.0, "tgo": 24000.0},
-          "cost": {"buy": 32.4, "sell": 95.2, "saved": 141.0, "base": 50.0},
-          "shelly": [{"idx": 0, "name": "Boiler", "id": "shellyplus1pm-aabbcc",
-                      "pw": 2000, "pri": 1, "auto": True, "on": True, "reach": True,
-                      "apower": 1970, "volt": 231, "amp": 8.52, "temp": 41.3,
-                      "e_day": 3.2, "e_tot": 812.4, "pv_day": 2.9, "rt_on": 95, "ov": 0, "lock": 0}],
-          "ext": [{"idx": 0, "name": "Waermepumpe", "pw": 1500, "pri": 2, "auto": False, "on": False,
-                   "rt_on": 0, "ov": 0, "lock": 0}],
-          "mqtt": {"conn": True}, "cfg": {"sl_ip": "192.168.1.50"}}
-SYSINFO = {"heap_free": 210000, "uptime": 98765, "eth": True, "temp": 46.2, "cpu0": 12,
-           "nvs_err": False, "boots": 14, "crashes": 1, "rst_txt": "Software-Neustart",
-           "rst_bad": False, "coredump": False, "build": "2026-09-01 10:22", "notify": {"cfg": True}}
-ALARMS = {"al": [{"id": 2, "name": "Keine Produktion", "sev": 1, "since": 1758000000,
-                  "mins": 42, "acked": False, "detail": ""}], "n": 1, "max": 1}
-calls = []
+SESSION_COOKIE = "abc123"
 
-def authed(request):
-    header = request.headers.get("Authorization", "")
-    if not header.startswith("Basic "):
-        return False
-    user, _, pw = base64.b64decode(header[6:]).decode().partition(":")
-    return user == "admin" and pw == PASSWORD
+# The 801/170 block as a Solar-Log with battery and two inverters reports it.
+BASIC = {
+    "100": "21.09.26 14:32:05",
+    "101": 4210, "102": 4290, "103": 231, "104": 612,
+    "105": 18400, "106": 21100, "107": 412000, "108": 4120000, "109": 41230000,
+    "110": 1180, "111": 7100, "112": 9200, "113": 210000, "114": 2010000,
+    "115": 20110000, "116": 9840,
+}
+BATTERY = [51.2, 78.0, 0.0, 900.0]          # voltage, level, charge W, discharge W
+ENERGY = [[1735689600, 3900000, 0, 1750000]]  # year rows: [ts, production, ?, self-consumption]
+INVERTER_POWER = {"0": "2600", "1": "1610"}
+INVERTER_ENERGY = [[1735689600, [2400000, 1720000]]]
+DEVICE_LIST = {"0": "Ok", "1": "Ok", "2": "Err"}
+DEVICE_NAMES = {"0": "Fronius Dach Sued", "1": "Fronius Dach Ost"}
 
-def guard(handler):
-    async def wrapped(request):
-        calls.append(f"{request.method} {request.path}?{request.query_string}".rstrip("?"))
-        if not authed(request):
-            return web.json_response({"ok": False, "auth": False}, status=401)
-        return await handler(request)
-    return wrapped
+requests_seen = []
+
+
+async def handle_getjp(request):
+    body = await request.text()
+    # Older firmware sends the session token prepended to the body.
+    token, _, payload = body.rpartition("; ") if "; " in body else ("", "", body)
+    requests_seen.append(payload)
+    query = json.loads(payload)
+
+    logged_in = request.cookies.get("SolarLog") == SESSION_COOKIE or token.endswith(SESSION_COOKIE)
+
+    if "801" in query:
+        # The main measurements are readable without a session.
+        return web.Response(text=json.dumps({"801": {"170": BASIC}}))
+
+    if not logged_in:
+        return web.Response(text='{"ACCESS DENIED"}')
+
+    if "858" in query:
+        return web.Response(text=json.dumps({"858": BATTERY}))
+    if "878" in query:
+        return web.Response(text=json.dumps({"878": ENERGY}))
+    if "782" in query:
+        return web.Response(text=json.dumps({"782": INVERTER_POWER}))
+    if "854" in query:
+        return web.Response(text=json.dumps({"854": INVERTER_ENERGY}))
+    if "740" in query:
+        return web.Response(text=json.dumps({"740": DEVICE_LIST}))
+    if "141" in query:
+        device_id = next(iter(query["141"]))
+        return web.Response(
+            text=json.dumps({"141": {device_id: {"119": DEVICE_NAMES[device_id]}}})
+        )
+    return web.Response(text='{"QUERY IMPOSSIBLE 000"}')
+
+
+async def handle_login(request):
+    body = await request.text()
+    fields = dict(part.split("=", 1) for part in body.split("&"))
+    if fields.get("u") != "user":
+        return web.Response(text="FAILED - User was wrong")
+    if fields.get("p") != PASSWORD:
+        return web.Response(text="FAILED - Password was wrong")
+    response = web.Response(text="SUCCESS")
+    response.set_cookie("SolarLog", SESSION_COOKIE)
+    return response
+
+
+def check(label, condition, detail=""):
+    print(f"{'PASS' if condition else 'FAIL'}  {label}{'' if condition else f'  -- {detail}'}")
+    if not condition:
+        sys.exit(1)
+
 
 async def main():
     app = web.Application()
-    app.router.add_get("/api/status", guard(lambda r: _json(STATUS)))
-    app.router.add_get("/api/sysinfo", guard(lambda r: _json(SYSINFO)))
-    app.router.add_get("/api/alarms", guard(lambda r: _json(ALARMS)))
-    app.router.add_post("/api/refresh", guard(lambda r: _json({"ok": True})))
-    app.router.add_post("/api/alarms/ack", guard(lambda r: _json({"ok": True})))
-    app.router.add_post("/api/shelly/{i}/{cmd}", guard(lambda r: _json({"ok": True})))
-    app.router.add_post("/api/ext/{i}/{cmd}", guard(lambda r: _json({"ok": True})))
-    runner = web.AppRunner(app); await runner.setup()
-    site = web.TCPSite(runner, "127.0.0.1", 8123); await site.start()
+    app.router.add_post("/getjp", handle_getjp)
+    app.router.add_post("/login", handle_login)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 8123)
+    await site.start()
 
-    async with ClientSession() as session:
-        client = api.AdvancedSolarLogClient(session, "127.0.0.1", 8123, PASSWORD)
-        status = await client.async_get_status()
-        sysinfo = await client.async_get_sysinfo()
-        alarms = await client.async_get_alarms()
-        assert status["batt"] == -900.0 and status["soc"] == 78.0, "Batteriewerte fehlen"
-        assert sysinfo["rst_txt"] == "Software-Neustart"
-        assert alarms["n"] == 1
-        # Der ausgelieferte Client muss rein lesend sein - keine Schreibmethoden.
-        writers = [n for n in dir(client) if n.startswith("async_") and n not in
-                   ("async_get_status", "async_get_sysinfo", "async_get_alarms")]
-        assert not writers, f"Unerwartete schreibende Methoden: {writers}"
-        assert all(c.startswith("GET ") for c in calls), calls
-        print("OK: nur lesende Routen, Aufrufe:", calls)
+    try:
+        # aiohttp's default cookie jar drops cookies for bare IP addresses;
+        # the test server is 127.0.0.1, a real Solar-Log would be a hostname.
+        async with ClientSession(cookie_jar=CookieJar(unsafe=True)) as session:
+            # --- without a password: only the main values ---
+            client = api.AdvancedSolarLogClient(session, "127.0.0.1", port=8123)
+            check("connection test succeeds", await client.async_test_connection())
 
-        bad = api.AdvancedSolarLogClient(session, "127.0.0.1", 8123, "falsch")
-        try:
-            await bad.async_get_status()
-        except api.AdvancedSolarLogAuthError as err:
-            print("OK: 401 ->", type(err).__name__)
-        else:
-            raise AssertionError("401 wurde nicht als AuthError erkannt")
+            values = await client.async_get_basic_data()
+            check("production read", values["101"] == 4210, values)
+            check("consumption read", values["110"] == 1180, values)
 
-        offline = api.AdvancedSolarLogClient(session, "127.0.0.1", 8199, None)
-        try:
-            await offline.async_get_status()
-        except api.AdvancedSolarLogAuthError:
-            raise AssertionError("Verbindungsfehler falsch klassifiziert")
-        except api.AdvancedSolarLogError as err:
-            print("OK: offline ->", type(err).__name__)
+            stamp = api.parse_timestamp(values["100"])
+            check("timestamp parsed", stamp is not None and stamp.year == 2026, stamp)
 
-        openclient = api.AdvancedSolarLogClient(session, "127.0.0.1", 8123, None)
-        try:
-            await openclient.async_get_status()
-        except api.AdvancedSolarLogAuthError:
-            print("OK: ohne Passwort gegen geschuetztes Geraet -> AuthError")
-    await runner.cleanup()
+            denied = False
+            try:
+                await client.async_get_battery()
+            except api.AdvancedSolarLogAuthError:
+                denied = True
+            check("battery needs a session", denied)
+            check("extended data reported unavailable", not await client.async_test_extended_data())
 
-def _json(payload):
-    async def _inner():
-        return web.json_response(payload)
-    return _inner()
+            # --- with the password: everything ---
+            client = api.AdvancedSolarLogClient(session, "127.0.0.1", port=8123, password=PASSWORD)
+            check("login succeeds", await client.async_login())
+            check("extended data available", await client.async_test_extended_data())
+
+            battery = await client.async_get_battery()
+            check("state of charge read", battery["level"] == 78.0, battery)
+            check("discharge power read", battery["discharge_power"] == 900.0, battery)
+            check("charge power read", battery["charge_power"] == 0.0, battery)
+            check("battery voltage read", battery["voltage"] == 51.2, battery)
+
+            energy = await client.async_get_energy()
+            check("yearly production read", energy["production"] == 3900000, energy)
+            check("self-consumption read", energy["self_consumption"] == 1750000, energy)
+
+            devices = await client.async_get_device_list()
+            check("failed inverter skipped", set(devices) == {0, 1}, devices)
+            check("inverter named", devices[0] == "Fronius Dach Sued", devices)
+
+            power = await client.async_get_inverter_power()
+            check("inverter power read", power[1] == 1610.0, power)
+
+            yields = await client.async_get_inverter_energy()
+            check("inverter yield read", yields[0] == 2400000, yields)
+
+            # --- wrong password (own session: the shared one is already logged in) ---
+            async with ClientSession(cookie_jar=CookieJar(unsafe=True)) as bad_session:
+                bad = api.AdvancedSolarLogClient(
+                    bad_session, "127.0.0.1", port=8123, password="falsch"
+                )
+                rejected = False
+                try:
+                    await bad.async_login()
+                except api.AdvancedSolarLogAuthError:
+                    rejected = True
+                check("wrong password rejected", rejected)
+
+            # --- unreachable host ---
+            offline = api.AdvancedSolarLogClient(session, "127.0.0.1", port=8199)
+            unreachable = False
+            try:
+                await offline.async_test_connection()
+            except api.AdvancedSolarLogError:
+                unreachable = True
+            check("unreachable host raises", unreachable)
+
+        # --- the client must stay read-only ---
+        own_methods = api.AdvancedSolarLogClient.__dict__
+        writers = [
+            name for name in own_methods
+            if not name.startswith("_")
+            and any(word in name for word in ("switch", "command", "save", "write", "restart", "set_"))
+        ]
+        check("no write methods on the client", not writers, writers)
+
+        check(
+            "every request went to the JSON interface",
+            all(part.startswith("{") for part in requests_seen),
+            requests_seen,
+        )
+    finally:
+        await runner.cleanup()
+
+    print(f"\nAll API checks passed ({len(requests_seen)} requests).")
+
 
 asyncio.run(main())

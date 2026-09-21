@@ -1,10 +1,10 @@
-"""Sensoren des EnergyOptimizer (Solar-Log-Werte, Zaehler, Diagnose)."""
+"""Sensors for the values the Solar-Log reports."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from datetime import datetime
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -17,231 +17,275 @@ from homeassistant.const import (
     PERCENTAGE,
     EntityCategory,
     UnitOfEnergy,
-    UnitOfInformation,
     UnitOfPower,
-    UnitOfTemperature,
-    UnitOfTime,
+    UnitOfElectricPotential,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, SEVERITY_NAMES
+from .const import (
+    DOMAIN,
+    FIELD_CONSUMPTION_AC,
+    FIELD_CONSUMPTION_DAY,
+    FIELD_CONSUMPTION_MONTH,
+    FIELD_CONSUMPTION_TOTAL,
+    FIELD_CONSUMPTION_YEAR,
+    FIELD_CONSUMPTION_YESTERDAY,
+    FIELD_POWER_AC,
+    FIELD_POWER_DC,
+    FIELD_TOTAL_POWER,
+    FIELD_VOLTAGE_AC,
+    FIELD_VOLTAGE_DC,
+    FIELD_YIELD_DAY,
+    FIELD_YIELD_MONTH,
+    FIELD_YIELD_TOTAL,
+    FIELD_YIELD_YEAR,
+    FIELD_YIELD_YESTERDAY,
+)
 from .coordinator import AdvancedSolarLogCoordinator, AdvancedSolarLogData
-from .entity import AdvancedSolarLogEntity
-
-
-def _neg_one_is_none(value: Any) -> Any:
-    """Die Firmware kodiert "noch nie passiert" als -1."""
-    if value is None or value == -1:
-        return None
-    return value
+from .entity import AdvancedSolarLogEntity, AdvancedSolarLogInverterEntity
 
 
 @dataclass(frozen=True, kw_only=True)
-class EOSensorDescription(SensorEntityDescription):
-    """Sensorbeschreibung mit Zugriffsfunktion auf die Poll-Daten."""
+class SolarLogSensorDescription(SensorEntityDescription):
+    """Sensor description with the accessor for its value."""
 
-    value_fn: Callable[[AdvancedSolarLogData], Any]
+    value_fn: Callable[[AdvancedSolarLogData], float | datetime | None]
+    # Entities whose source is absent on this installation are never created.
     exists_fn: Callable[[AdvancedSolarLogData], bool] = lambda _: True
 
 
-def _status(key: str) -> Callable[[AdvancedSolarLogData], Any]:
-    return lambda data: data.status.get(key)
+def _field(number: str) -> Callable[[AdvancedSolarLogData], float | None]:
+    """Accessor for one field of the main 801/170 block."""
+    return lambda data: data.number(number)
 
 
-def _energy(key: str) -> Callable[[AdvancedSolarLogData], Any]:
-    return lambda data: data.energy.get(key)
+def _battery(key: str) -> Callable[[AdvancedSolarLogData], float | None]:
+    """Accessor for one battery value."""
+    return lambda data: None if data.battery is None else data.battery[key]
 
 
-def _sysinfo(key: str) -> Callable[[AdvancedSolarLogData], Any]:
-    return lambda data: data.sysinfo.get(key)
+def _has_battery(data: AdvancedSolarLogData) -> bool:
+    return data.battery is not None
 
 
-def _cost(key: str) -> Callable[[AdvancedSolarLogData], Any]:
-    # Die Firmware rechnet in Rappen; Home Assistant will eine Waehrungseinheit.
-    def _value(data: AdvancedSolarLogData) -> Any:
-        raw = data.cost.get(key)
-        return None if raw is None else round(raw / 100, 4)
-
-    return _value
-
-
-POWER_SENSORS: tuple[EOSensorDescription, ...] = (
-    EOSensorDescription(
-        key="prod",
-        translation_key="production",
+POWER_SENSORS: tuple[SolarLogSensorDescription, ...] = (
+    SolarLogSensorDescription(
+        key="power_ac",
+        translation_key="power_ac",
         device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPower.WATT,
-        value_fn=_status("prod"),
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_field(FIELD_POWER_AC),
     ),
-    EOSensorDescription(
-        key="cons",
-        translation_key="consumption",
+    SolarLogSensorDescription(
+        key="power_dc",
+        translation_key="power_dc",
         device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPower.WATT,
-        value_fn=_status("cons"),
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_registry_enabled_default=False,
+        value_fn=_field(FIELD_POWER_DC),
     ),
-    EOSensorDescription(
-        key="grid",
+    SolarLogSensorDescription(
+        key="consumption_ac",
+        translation_key="consumption_ac",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_field(FIELD_CONSUMPTION_AC),
+    ),
+    SolarLogSensorDescription(
+        key="grid_power",
         translation_key="grid_power",
         device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPower.WATT,
-        value_fn=_status("grid"),
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: data.grid_power,
     ),
-    # Batterie: nur vorhanden, wenn die Anlage eine hat (sd.has_battery).
-    EOSensorDescription(
-        key="batt",
+    SolarLogSensorDescription(
+        key="voltage_ac",
+        translation_key="voltage_ac",
+        device_class=SensorDeviceClass.VOLTAGE,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_registry_enabled_default=False,
+        value_fn=_field(FIELD_VOLTAGE_AC),
+    ),
+    SolarLogSensorDescription(
+        key="voltage_dc",
+        translation_key="voltage_dc",
+        device_class=SensorDeviceClass.VOLTAGE,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_registry_enabled_default=False,
+        value_fn=_field(FIELD_VOLTAGE_DC),
+    ),
+)
+
+# The values the official integration leaves out on an unprotected setup, and
+# the reason this integration exists.
+BATTERY_SENSORS: tuple[SolarLogSensorDescription, ...] = (
+    SolarLogSensorDescription(
+        key="battery_level",
+        translation_key="battery_level",
+        device_class=SensorDeviceClass.BATTERY,
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_battery("level"),
+        exists_fn=_has_battery,
+    ),
+    SolarLogSensorDescription(
+        key="battery_power",
         translation_key="battery_power",
         device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPower.WATT,
-        value_fn=_status("batt"),
-        exists_fn=lambda data: "batt" in data.status,
-    ),
-    EOSensorDescription(
-        key="soc",
-        translation_key="battery_soc",
-        device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=PERCENTAGE,
-        value_fn=_status("soc"),
-        exists_fn=lambda data: "soc" in data.status,
+        value_fn=lambda data: data.battery_power,
+        exists_fn=_has_battery,
+    ),
+    SolarLogSensorDescription(
+        key="battery_charge_power",
+        translation_key="battery_charge_power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_battery("charge_power"),
+        exists_fn=_has_battery,
+    ),
+    SolarLogSensorDescription(
+        key="battery_discharge_power",
+        translation_key="battery_discharge_power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_battery("discharge_power"),
+        exists_fn=_has_battery,
+    ),
+    SolarLogSensorDescription(
+        key="battery_voltage",
+        translation_key="battery_voltage",
+        device_class=SensorDeviceClass.VOLTAGE,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_registry_enabled_default=False,
+        value_fn=_battery("voltage"),
+        exists_fn=_has_battery,
     ),
 )
 
-ENERGY_SENSORS: tuple[EOSensorDescription, ...] = tuple(
-    EOSensorDescription(
-        key=key,
-        translation_key=translation_key,
+# Wh counters. `total_increasing` lets the Energy Dashboard use them directly
+# and handles the reset at midnight / month / year on its own.
+ENERGY_SENSORS: tuple[SolarLogSensorDescription, ...] = (
+    SolarLogSensorDescription(
+        key="yield_day",
+        translation_key="yield_day",
         device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        suggested_display_precision=2,
-        value_fn=_energy(key),
-    )
-    for key, translation_key in (
-        ("dp", "production_today"),
-        ("dc", "consumption_today"),
-        ("dgi", "grid_import_today"),
-        ("dgo", "grid_export_today"),
-        ("tp", "production_total"),
-        ("tc", "consumption_total"),
-        ("tgi", "grid_import_total"),
-        ("tgo", "grid_export_total"),
-    )
+        value_fn=_field(FIELD_YIELD_DAY),
+    ),
+    SolarLogSensorDescription(
+        key="yield_yesterday",
+        translation_key="yield_yesterday",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        value_fn=_field(FIELD_YIELD_YESTERDAY),
+    ),
+    SolarLogSensorDescription(
+        key="yield_month",
+        translation_key="yield_month",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value_fn=_field(FIELD_YIELD_MONTH),
+    ),
+    SolarLogSensorDescription(
+        key="yield_year",
+        translation_key="yield_year",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value_fn=_field(FIELD_YIELD_YEAR),
+    ),
+    SolarLogSensorDescription(
+        key="yield_total",
+        translation_key="yield_total",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value_fn=_field(FIELD_YIELD_TOTAL),
+    ),
+    SolarLogSensorDescription(
+        key="consumption_day",
+        translation_key="consumption_day",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value_fn=_field(FIELD_CONSUMPTION_DAY),
+    ),
+    SolarLogSensorDescription(
+        key="consumption_yesterday",
+        translation_key="consumption_yesterday",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        value_fn=_field(FIELD_CONSUMPTION_YESTERDAY),
+    ),
+    SolarLogSensorDescription(
+        key="consumption_month",
+        translation_key="consumption_month",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value_fn=_field(FIELD_CONSUMPTION_MONTH),
+    ),
+    SolarLogSensorDescription(
+        key="consumption_year",
+        translation_key="consumption_year",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value_fn=_field(FIELD_CONSUMPTION_YEAR),
+    ),
+    SolarLogSensorDescription(
+        key="consumption_total",
+        translation_key="consumption_total",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value_fn=_field(FIELD_CONSUMPTION_TOTAL),
+    ),
+    SolarLogSensorDescription(
+        key="self_consumption_year",
+        translation_key="self_consumption_year",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value_fn=lambda data: None if data.energy is None else data.energy["self_consumption"],
+        exists_fn=lambda data: data.energy is not None,
+    ),
 )
 
-COST_SENSORS: tuple[EOSensorDescription, ...] = tuple(
-    EOSensorDescription(
-        key=f"cost_{key}",
-        translation_key=translation_key,
-        device_class=SensorDeviceClass.MONETARY,
-        state_class=SensorStateClass.TOTAL,
-        native_unit_of_measurement="CHF",
-        suggested_display_precision=2,
-        value_fn=_cost(key),
-        exists_fn=lambda data: bool(data.cost),
-    )
-    for key, translation_key in (
-        ("buy", "cost_import_today"),
-        ("sell", "cost_export_today"),
-        ("saved", "cost_saved_today"),
-        ("base", "cost_base_today"),
-    )
+DIAGNOSTIC_SENSORS: tuple[SolarLogSensorDescription, ...] = (
+    SolarLogSensorDescription(
+        key="last_updated",
+        translation_key="last_updated",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: data.last_updated,
+    ),
+    SolarLogSensorDescription(
+        key="installed_power",
+        translation_key="installed_power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=_field(FIELD_TOTAL_POWER),
+    ),
 )
 
-DIAGNOSTIC_SENSORS: tuple[EOSensorDescription, ...] = (
-    EOSensorDescription(
-        key="sl_age",
-        translation_key="solarlog_age",
-        device_class=SensorDeviceClass.DURATION,
-        native_unit_of_measurement=UnitOfTime.SECONDS,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: _neg_one_is_none(data.status.get("sl_age")),
-    ),
-    EOSensorDescription(
-        key="sl_next",
-        translation_key="solarlog_next",
-        device_class=SensorDeviceClass.DURATION,
-        native_unit_of_measurement=UnitOfTime.SECONDS,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: _neg_one_is_none(data.status.get("sl_next")),
-    ),
-    EOSensorDescription(
-        key="al_n",
-        translation_key="active_alarms",
-        state_class=SensorStateClass.MEASUREMENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_status("al_n"),
-    ),
-    EOSensorDescription(
-        key="al_sev",
-        translation_key="alarm_severity",
-        device_class=SensorDeviceClass.ENUM,
-        options=["none", "info", "warn", "crit"],
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: SEVERITY_NAMES.get(data.status.get("al_sev"), "none")
-        if data.status.get("al_n")
-        else "none",
-    ),
-    EOSensorDescription(
-        key="led",
-        translation_key="led_state",
-        device_class=SensorDeviceClass.ENUM,
-        options=["off", "wifi_connecting", "connected", "disconnected", "scan"],
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_status("led"),
-    ),
-    EOSensorDescription(
-        key="uptime",
-        translation_key="uptime",
-        device_class=SensorDeviceClass.DURATION,
-        native_unit_of_measurement=UnitOfTime.SECONDS,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_sysinfo("uptime"),
-    ),
-    EOSensorDescription(
-        key="chip_temp",
-        translation_key="chip_temperature",
-        device_class=SensorDeviceClass.TEMPERATURE,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        suggested_display_precision=1,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_sysinfo("temp"),
-    ),
-    EOSensorDescription(
-        key="heap_free",
-        translation_key="heap_free",
-        device_class=SensorDeviceClass.DATA_SIZE,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfInformation.BYTES,
-        suggested_unit_of_measurement=UnitOfInformation.KILOBYTES,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_sysinfo("heap_free"),
-    ),
-    EOSensorDescription(
-        key="crashes",
-        translation_key="crashes",
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_sysinfo("crashes"),
-    ),
-    EOSensorDescription(
-        key="rst_txt",
-        translation_key="reset_reason",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_sysinfo("rst_txt"),
-    ),
-    EOSensorDescription(
-        key="build",
-        translation_key="firmware_build",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_sysinfo("build"),
-    ),
+ALL_SENSORS: tuple[SolarLogSensorDescription, ...] = (
+    POWER_SENSORS + BATTERY_SENSORS + ENERGY_SENSORS + DIAGNOSTIC_SENSORS
 )
 
 
@@ -250,39 +294,88 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Sensoren anlegen - was es gibt, entscheidet der erste Poll."""
+    """Create the sensors this installation actually has."""
     coordinator: AdvancedSolarLogCoordinator = hass.data[DOMAIN][entry.entry_id]
     data = coordinator.data
 
     entities: list[SensorEntity] = [
         AdvancedSolarLogSensor(coordinator, description)
-        for description in (
-            *POWER_SENSORS,
-            *ENERGY_SENSORS,
-            *COST_SENSORS,
-            *DIAGNOSTIC_SENSORS,
-        )
+        for description in ALL_SENSORS
         if description.exists_fn(data)
     ]
+
+    for index, inverter in data.inverters.items():
+        entities.append(
+            AdvancedSolarLogInverterSensor(
+                coordinator, index, inverter.name, INVERTER_POWER
+            )
+        )
+        entities.append(
+            AdvancedSolarLogInverterSensor(
+                coordinator, index, inverter.name, INVERTER_YIELD_YEAR
+            )
+        )
 
     async_add_entities(entities)
 
 
 class AdvancedSolarLogSensor(AdvancedSolarLogEntity, SensorEntity):
-    """Ein Wert aus /api/status oder /api/sysinfo."""
+    """One value of the Solar-Log itself."""
 
-    entity_description: EOSensorDescription
+    entity_description: SolarLogSensorDescription
 
     def __init__(
         self,
         coordinator: AdvancedSolarLogCoordinator,
-        description: EOSensorDescription,
+        description: SolarLogSensorDescription,
     ) -> None:
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{self._entry_id}_{description.key}"
 
     @property
-    def native_value(self) -> Any:
-        """Aktueller Wert."""
+    def native_value(self) -> float | datetime | None:
+        """Current value."""
         return self.entity_description.value_fn(self.coordinator.data)
+
+
+INVERTER_POWER = SensorEntityDescription(
+    key="inverter_power",
+    translation_key="inverter_power",
+    device_class=SensorDeviceClass.POWER,
+    native_unit_of_measurement=UnitOfPower.WATT,
+    state_class=SensorStateClass.MEASUREMENT,
+)
+
+INVERTER_YIELD_YEAR = SensorEntityDescription(
+    key="inverter_yield_year",
+    translation_key="inverter_yield_year",
+    device_class=SensorDeviceClass.ENERGY,
+    native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+    state_class=SensorStateClass.TOTAL_INCREASING,
+)
+
+
+class AdvancedSolarLogInverterSensor(AdvancedSolarLogInverterEntity, SensorEntity):
+    """One value of a single inverter behind the Solar-Log."""
+
+    def __init__(
+        self,
+        coordinator: AdvancedSolarLogCoordinator,
+        index: int,
+        name: str,
+        description: SensorEntityDescription,
+    ) -> None:
+        super().__init__(coordinator, index, name)
+        self.entity_description = description
+        self._attr_unique_id = f"{self._entry_id}_inverter_{index}_{description.key}"
+
+    @property
+    def native_value(self) -> float | None:
+        """Current value, or None while the inverter is not reporting."""
+        inverter = self.coordinator.data.inverters.get(self._index)
+        if inverter is None:
+            return None
+        if self.entity_description.key == "inverter_power":
+            return inverter.power
+        return inverter.yield_year
