@@ -77,8 +77,10 @@ class AdvancedSolarLogClient:
             return f"http://{self.host}"
         return f"http://{self.host}:{self.port}"
 
-    async def _post(self, body: str, path: str = "getjp") -> str:
-        """Send one request and return the raw response text."""
+    async def _post_response(
+        self, body: str, path: str = "getjp"
+    ) -> aiohttp.ClientResponse:
+        """Send one request and return the raw response."""
         url = f"{self.base_url}/{path}"
         # Solar-Log rejects application/json here; its own web UI posts the
         # JSON document as text/html and relies on the CSRF header.
@@ -109,6 +111,11 @@ class AdvancedSolarLogClient:
                 f"Solar-Log answered with HTTP {response.status} on {path}"
             )
 
+        return response
+
+    async def _post(self, body: str, path: str = "getjp") -> str:
+        """Send one request and return the raw response text."""
+        response = await self._post_response(body, path)
         return await response.text(errors="replace")
 
     async def _request(self, body: str) -> dict[str, Any]:
@@ -139,7 +146,10 @@ class AdvancedSolarLogClient:
         if not self.password:
             return False
 
-        text = await self._post(f"u={API_USERNAME}&p={self.password}", path="login")
+        response = await self._post_response(
+            f"u={API_USERNAME}&p={self.password}", path="login"
+        )
+        text = await response.text(errors="replace")
 
         if "FAILED - User was wrong" in text:
             # This firmware has no password set, so the password is pointless.
@@ -149,14 +159,15 @@ class AdvancedSolarLogClient:
         if "FAILED - Password was wrong" in text:
             # Newer firmware expects the password bcrypt-hashed with a salt the
             # device hands out. Only a second failure is a real auth error.
-            text = await self._retry_login_hashed()
+            text, response = await self._retry_login_hashed()
 
         if "FAILED" in text:
             raise AdvancedSolarLogAuthError("Solar-Log rejected the password")
 
+        self._remember_session(response)
         return True
 
-    async def _retry_login_hashed(self) -> str:
+    async def _retry_login_hashed(self) -> tuple[str, aiohttp.ClientResponse]:
         """Second login attempt with the bcrypt-hashed password."""
         # Imported lazily: bcrypt is only needed on firmware that hashes.
         import bcrypt  # noqa: PLC0415
@@ -172,12 +183,29 @@ class AdvancedSolarLogClient:
                 "Solar-Log returned a salt that bcrypt does not accept"
             ) from err
 
-        text = await self._post(f"u={API_USERNAME}&p={hashed}", path="login")
+        response = await self._post_response(f"u={API_USERNAME}&p={hashed}", path="login")
+        text = await response.text(errors="replace")
         if "FAILED" not in text:
             # Keep the hash: the device expects it on every later login.
             self.password = hashed
             self._hashed_password = True
-        return text
+        return text, response
+
+    def _remember_session(self, response: aiohttp.ClientResponse) -> None:
+        """Capture the session token straight from the login response's cookie.
+
+        Home Assistant's shared HTTP session uses aiohttp's default cookie
+        jar, which silently drops cookies for bare IP-address hosts -- common
+        for a local device like this one, and exactly reproducible with a
+        default aiohttp.CookieJar() against an IP host. Reading the cookie
+        directly off this response (unaffected by the jar's own storage
+        policy) and repeating it as `token=...` in every later request body,
+        the way the device's own web UI does, works regardless of whether the
+        host is a hostname or a bare IP.
+        """
+        cookie = response.cookies.get("SolarLog")
+        if cookie:
+            self._token = cookie.value
 
     async def async_test_connection(self) -> bool:
         """Check that the host really is a Solar-Log with the interface enabled."""

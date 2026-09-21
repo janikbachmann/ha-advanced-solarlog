@@ -164,6 +164,30 @@ async def main():
                 unreachable = True
             check("unreachable host raises", unreachable)
 
+        # --- login over Home Assistant's actual shared session: a *default*
+        # cookie jar (unsafe=False), against an IP-literal host. aiohttp
+        # silently refuses to store cookies for bare IP addresses with that
+        # jar, which used to leave every later request unauthenticated even
+        # right after a successful login (reproduces a real report: login
+        # succeeds, then every protected field comes back "ACCESS DENIED"
+        # regardless of the password). The client must carry its own session
+        # token instead of relying on the jar. ---
+        async with ClientSession() as safe_session:
+            client = api.AdvancedSolarLogClient(
+                safe_session, "127.0.0.1", port=8123, password=PASSWORD
+            )
+            check("login succeeds with the default cookie jar", await client.async_login())
+            check(
+                "cookie was not stored by the default jar for an IP host (sanity check)",
+                not safe_session.cookie_jar.filter_cookies(f"http://127.0.0.1:8123"),
+            )
+            battery = await client.async_get_battery()
+            check(
+                "battery still readable without a stored cookie",
+                battery is not None and battery["level"] == 78.0,
+                battery,
+            )
+
         # --- the client must stay read-only ---
         own_methods = api.AdvancedSolarLogClient.__dict__
         writers = [

@@ -16,11 +16,21 @@
         "data": {
           "password": "Passwort"
         }
+      },
+      "reconfigure": {
+        "title": "Solar-Log neu konfigurieren",
+        "description": "Host, Port oder Passwort ändern, z. B. wenn der Solar-Log eine neue IP-Adresse bekommen hat.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "password": "Passwort"
+        }
       }
     },
     "error": {
       "cannot_connect": "Unter dieser Adresse hat kein Solar-Log geantwortet. Prüfe den Host und ob die JSON-Schnittstelle am Gerät aktiviert ist.",
-      "invalid_auth": "Der Solar-Log hat dieses Passwort abgelehnt."
+      "invalid_auth": "Der Solar-Log hat dieses Passwort abgelehnt.",
+      "already_configured": "Dieser Host wird bereits von einem anderen Advanced-Solar-Log-Eintrag verwendet."
     },
     "abort": {
       "already_configured": "Dieser Solar-Log ist bereits eingerichtet.",
