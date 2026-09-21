@@ -193,6 +193,12 @@ CI additionally checks the manifest and translation files against Home
 Assistant's own rules with `hassfest`, and the repository structure with
 `hacs/action`.
 
+Releases are published automatically: when the `version` field in
+`custom_components/advanced_solarlog/manifest.json` changes on `main`, the
+`Release` workflow tags that commit `v<version>` and publishes a release with
+generated notes. HACS reads those releases, so bumping the manifest is the
+only step needed to ship a version.
+
 The domain name `advanced_solarlog` is embedded in every entity ID and cannot
 be changed after the first installation without recreating every entity.
 
