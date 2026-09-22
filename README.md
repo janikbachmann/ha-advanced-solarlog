@@ -5,7 +5,6 @@
 
   **Every value from your Solar-Log system in Home Assistant — including the ones the official plugin leaves out.**
 
-  [![Status: Work in Progress][wip-badge]](#status)
   [![Version][version-badge]][releases]
   [![HACS: Custom][hacs-badge]][hacs]
   [![Validate][validate-badge]][validate]
@@ -16,14 +15,9 @@
 
 ## Status
 
-> [!WARNING]
-> **Work in Progress — version 0.1.8.**
-> This integration now runs against a real Home Assistant instance and a real
-> Solar-Log, on top of the automated tests and Home Assistant's own checks
-> (`hassfest`). It has not been through a long stretch of daily use yet.
->
-> Expect rough edges, and please report them as an [issue][issues].
-> **Version 1.0.0 lands once production use is confirmed.**
+Confirmed in production use on a real Home Assistant instance and a real
+Solar-Log, on top of the automated tests and Home Assistant's own checks
+(`hassfest`). Please still report rough edges as an [issue][issues].
 
 This integration talks to your Solar-Log device directly, over its own JSON
 interface (`/getjp`) on the local network. It reads the values the official
@@ -100,7 +94,7 @@ services → Add integration → "HACS", if you don't have it yet — see the
 Click the button above to open this repository directly in HACS on your own
 Home Assistant instance, then **Download**. Or by hand: HACS → Integrations
 → ⋮ → **Custom repositories** → add
-`https://github.com/janikbachmann/ha-advanced-solarlog` as an *Integration*,
+`https://github.com/officialminx/ha-advanced-solarlog` as an *Integration*,
 then install "Advanced Solar-Log".
 
 Either way, **restart Home Assistant** afterwards -- a new integration is
@@ -249,17 +243,16 @@ Inclusion in the HACS default list additionally needs it in the
 <!-- Links -->
 [hacs]: https://github.com/hacs/integration
 [hacs-badge]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge
-[validate]: https://github.com/janikbachmann/ha-advanced-solarlog/actions/workflows/validate.yml
-[validate-badge]: https://img.shields.io/github/actions/workflow/status/janikbachmann/ha-advanced-solarlog/validate.yml?style=for-the-badge&label=Validate
+[validate]: https://github.com/officialminx/ha-advanced-solarlog/actions/workflows/validate.yml
+[validate-badge]: https://img.shields.io/github/actions/workflow/status/officialminx/ha-advanced-solarlog/validate.yml?style=for-the-badge&label=Validate
 [license]: LICENSE
 [license-badge]: https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge
-[my-hacs]: https://my.home-assistant.io/redirect/hacs_repository/?owner=janikbachmann&repository=ha-advanced-solarlog&category=integration
+[my-hacs]: https://my.home-assistant.io/redirect/hacs_repository/?owner=officialminx&repository=ha-advanced-solarlog&category=integration
 [my-hacs-badge]: https://my.home-assistant.io/badges/hacs_repository.svg
 [my-config]: https://my.home-assistant.io/redirect/config_flow_start/?domain=advanced_solarlog
 [my-config-badge]: https://my.home-assistant.io/badges/config_flow_start.svg
 [brands]: https://github.com/home-assistant/brands
-[wip-badge]: https://img.shields.io/badge/Status-Work%20in%20Progress-orange.svg?style=for-the-badge
-[version-badge]: https://img.shields.io/badge/Version-0.1.8-blue.svg?style=for-the-badge
-[releases]: https://github.com/janikbachmann/ha-advanced-solarlog/releases
-[issues]: https://github.com/janikbachmann/ha-advanced-solarlog/issues
+[version-badge]: https://img.shields.io/badge/Version-1.0.0-blue.svg?style=for-the-badge
+[releases]: https://github.com/officialminx/ha-advanced-solarlog/releases
+[issues]: https://github.com/officialminx/ha-advanced-solarlog/issues
 [power-flow]: https://github.com/flixlix/power-flow-card-plus
