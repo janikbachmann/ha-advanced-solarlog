@@ -19,6 +19,8 @@ Confirmed in production use on a real Home Assistant instance and a real
 Solar-Log, on top of the automated tests and Home Assistant's own checks
 (`hassfest`). Please still report rough edges as an [issue][issues].
 
+## What it does
+
 This integration talks to your Solar-Log device directly, over its own JSON
 interface (`/getjp`) on the local network. It reads the values the official
 Solar-Log plugin exposes plus **battery power and state of charge**, which the
@@ -39,6 +41,56 @@ loop, no YAML configuration.
 | Self-consumption | ❌ | ✅ |
 | Per-inverter power and yield | ❌ | ✅ |
 | Setup through the UI | ✅ | ✅ |
+
+## Installation
+
+This is a custom integration, not an official Home Assistant plugin, so it
+does not ship with Home Assistant and is not in the default HACS store list.
+It needs [HACS](https://hacs.xyz) installed first (Settings → Devices &
+services → Add integration → "HACS", if you don't have it yet — see the
+[HACS download guide](https://hacs.xyz/docs/use/download/download/)).
+
+### Via HACS
+
+[![Add repository to HACS][my-hacs-badge]][my-hacs]
+
+Click the button above to open this repository directly in HACS on your own
+Home Assistant instance, then **Download**. Or by hand: HACS → Integrations
+→ ⋮ → **Custom repositories** → add
+`https://github.com/officialminx/ha-advanced-solarlog` as an *Integration*,
+then install "Advanced Solar-Log".
+
+Either way, **restart Home Assistant** afterwards -- a new integration is
+only picked up after a full restart, not a reload.
+
+### Manually
+
+Copy the `custom_components/advanced_solarlog/` folder into Home Assistant's
+`config/custom_components/` directory and restart.
+
+**Requires Home Assistant 2024.12 or newer.**
+
+## Setup
+
+[![Add integration][my-config-badge]][my-config]
+
+Or: **Settings → Devices & services → Add integration → "Advanced
+Solar-Log"**.
+
+| Field | Value |
+|---|---|
+| Host | the Solar-Log's host name or IP address |
+| Port | `80` |
+| Password | the device's own web password — leave empty if none is set |
+
+Without a password only production, consumption and the energy counters are
+available; battery, self-consumption and per-inverter values sit behind the
+device's login and stay unavailable until a password is set.
+
+The **poll interval** (default 60 seconds) can be changed afterwards under
+*Configure*. The **host and password** can be changed afterwards under
+*Devices & services → Advanced Solar-Log → ⋮ → Reconfigure* — useful if the
+device gets a new IP address or you set a password on it later.
 
 ## Entities
 
@@ -78,54 +130,6 @@ its current power and this year's yield.
 > actually reports them — an installation without a battery gets no empty
 > entities, and reading them needs the device's web password (see
 > [Setup](#setup)).
-
-## Installation
-
-This is a custom integration, not an official Home Assistant plugin, so it
-does not ship with Home Assistant and is not in the default HACS store list.
-It needs [HACS](https://hacs.xyz) installed first (Settings → Devices &
-services → Add integration → "HACS", if you don't have it yet — see the
-[HACS download guide](https://hacs.xyz/docs/use/download/download/)).
-
-### Via HACS
-
-[![Add repository to HACS][my-hacs-badge]][my-hacs]
-
-Click the button above to open this repository directly in HACS on your own
-Home Assistant instance, then **Download**. Or by hand: HACS → Integrations
-→ ⋮ → **Custom repositories** → add
-`https://github.com/officialminx/ha-advanced-solarlog` as an *Integration*,
-then install "Advanced Solar-Log".
-
-Either way, **restart Home Assistant** afterwards -- a new integration is
-only picked up after a full restart, not a reload.
-
-### Manually
-
-Copy the `custom_components/advanced_solarlog/` folder into Home Assistant's
-`config/custom_components/` directory and restart.
-
-## Setup
-
-[![Add integration][my-config-badge]][my-config]
-
-Or: **Settings → Devices & services → Add integration → "Advanced
-Solar-Log"**.
-
-| Field | Value |
-|---|---|
-| Host | the Solar-Log's host name or IP address |
-| Port | `80` |
-| Password | the device's own web password — leave empty if none is set |
-
-Without a password only production, consumption and the energy counters are
-available; battery, self-consumption and per-inverter values sit behind the
-device's login and stay unavailable until a password is set.
-
-The **poll interval** (default 60 seconds) can be changed afterwards under
-*Configure*. The **host and password** can be changed afterwards under
-*Devices & services → Advanced Solar-Log → ⋮ → Reconfigure* — useful if the
-device gets a new IP address or you set a password on it later.
 
 ## Dashboard
 
@@ -236,23 +240,25 @@ be changed after the first installation without recreating every entity.
 Inclusion in the HACS default list additionally needs it in the
 [`home-assistant/brands`][brands] repository.
 
+Issues and pull requests are welcome.
+
 ## License
 
 [MIT](LICENSE)
 
 <!-- Links -->
+[brands]: https://github.com/home-assistant/brands
 [hacs]: https://github.com/hacs/integration
 [hacs-badge]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge
-[validate]: https://github.com/officialminx/ha-advanced-solarlog/actions/workflows/validate.yml
-[validate-badge]: https://img.shields.io/github/actions/workflow/status/officialminx/ha-advanced-solarlog/validate.yml?style=for-the-badge&label=Validate
+[issues]: https://github.com/officialminx/ha-advanced-solarlog/issues
 [license]: LICENSE
 [license-badge]: https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge
-[my-hacs]: https://my.home-assistant.io/redirect/hacs_repository/?owner=officialminx&repository=ha-advanced-solarlog&category=integration
-[my-hacs-badge]: https://my.home-assistant.io/badges/hacs_repository.svg
 [my-config]: https://my.home-assistant.io/redirect/config_flow_start/?domain=advanced_solarlog
 [my-config-badge]: https://my.home-assistant.io/badges/config_flow_start.svg
-[brands]: https://github.com/home-assistant/brands
-[version-badge]: https://img.shields.io/badge/Version-1.0.0-blue.svg?style=for-the-badge
-[releases]: https://github.com/officialminx/ha-advanced-solarlog/releases
-[issues]: https://github.com/officialminx/ha-advanced-solarlog/issues
+[my-hacs]: https://my.home-assistant.io/redirect/hacs_repository/?owner=officialminx&repository=ha-advanced-solarlog&category=integration
+[my-hacs-badge]: https://my.home-assistant.io/badges/hacs_repository.svg
 [power-flow]: https://github.com/flixlix/power-flow-card-plus
+[releases]: https://github.com/officialminx/ha-advanced-solarlog/releases
+[validate]: https://github.com/officialminx/ha-advanced-solarlog/actions/workflows/validate.yml
+[validate-badge]: https://img.shields.io/github/actions/workflow/status/officialminx/ha-advanced-solarlog/validate.yml?style=for-the-badge&label=Validate
+[version-badge]: https://img.shields.io/github/v/release/officialminx/ha-advanced-solarlog?sort=semver&style=for-the-badge&label=Version
