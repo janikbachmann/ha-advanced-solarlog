@@ -17,7 +17,7 @@
 ## Status
 
 > [!WARNING]
-> **Work in Progress — version 0.1.5.**
+> **Work in Progress — version 0.1.6.**
 > This integration has **not yet been tested against a real Home Assistant
 > instance**. The code is covered by automated tests and Home Assistant's own
 > checks (`hassfest`), but running it against a live Home Assistant and a real
@@ -161,10 +161,12 @@ the field empty if the device has no password set.
 **Battery and inverter values stay unavailable even with the right password.**
 The device's login expects an account name as well as the password, and
 firmware differs in which one it accepts. The integration tries the known
-names in turn. Under *Devices & services → Advanced Solar-Log → ⋮ → Download
-diagnostics*, the `login` section shows each name it tried and what the device
-answered — that file is the quickest way to report the problem as an
-[issue][issues], and it contains no password.
+names in turn. When a protected value stays refused, the Home Assistant log
+carries one warning with the whole login report: the names tried, what the
+device answered to each, and whether a session cookie came back. The same
+report is in the `login` section of *Devices & services → Advanced Solar-Log →
+⋮ → Download diagnostics*. Either one is enough to report the problem as an
+[issue][issues], and neither contains a password.
 
 **Battery or inverter entities are missing.**
 They need a password: without one, only the unprotected main values are

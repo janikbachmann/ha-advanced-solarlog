@@ -2,7 +2,7 @@
 
 Run with: python3 tests/test_api.py
 """
-import asyncio, importlib.util, json, pathlib, sys, types
+import asyncio, importlib.util, json, logging, pathlib, sys, types
 import bcrypt
 from aiohttp import CookieJar, web, ClientSession
 from yarl import URL
@@ -216,6 +216,12 @@ async def main():
             stamp = api.parse_timestamp(values["100"])
             check("timestamp parsed", stamp is not None and stamp.year == 2026, stamp)
 
+            warnings = []
+            handler = logging.Handler()
+            handler.emit = lambda record: warnings.append(record.getMessage())
+            handler.setLevel(logging.WARNING)
+            api._LOGGER.addHandler(handler)
+
             denied = False
             try:
                 await client.async_get_battery()
@@ -223,6 +229,20 @@ async def main():
                 denied = True
             check("battery needs a session", denied)
             check("extended data reported unavailable", not await client.async_test_extended_data())
+
+            # The reason a value stays denied has to reach the ordinary Home
+            # Assistant log -- a debug line nobody turns on is no use.
+            check(
+                "the denial is explained in a warning, once",
+                len(warnings) == 1 and "Login report" in warnings[0],
+                warnings,
+            )
+            check(
+                "that warning names the login state",
+                "'password_configured': False" in warnings[0],
+                warnings,
+            )
+            api._LOGGER.removeHandler(handler)
 
             # --- with the password: everything ---
             client = api.AdvancedSolarLogClient(session, "127.0.0.1", port=8123, password=PASSWORD)
@@ -288,15 +308,21 @@ async def main():
                 safe_session, "127.0.0.1", port=8123, password=PASSWORD
             )
             check("login succeeds with the default cookie jar", await client.async_login())
-            check(
-                "the cookie is now in the jar, forced in past the IP-host check",
-                bool(safe_session.cookie_jar.filter_cookies(URL("http://127.0.0.1:8123"))),
-            )
             battery = await client.async_get_battery()
             check(
-                "battery still readable",
+                "battery readable although the jar stored nothing",
                 battery is not None and battery["level"] == 78.0,
                 battery,
+            )
+            # The cookie belongs to this device. An earlier version forced it
+            # into the shared jar with no host restriction, which made aiohttp
+            # attach it to every request the session sent, to any host.
+            check(
+                "the session cookie is not left in the shared jar",
+                not safe_session.cookie_jar.filter_cookies(URL("http://127.0.0.1:8123"))
+                and not safe_session.cookie_jar.filter_cookies(
+                    URL("http://example.invalid")
+                ),
             )
 
         # --- hashed-password (newer) firmware on an IP host: this firmware
@@ -323,7 +349,7 @@ async def main():
                 )
                 battery = await client.async_get_battery()
                 check(
-                    "battery readable via the forced cookie jar alone",
+                    "battery readable via the Cookie header alone",
                     battery is not None and battery["level"] == 78.0,
                     battery,
                 )
