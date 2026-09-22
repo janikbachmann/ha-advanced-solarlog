@@ -264,6 +264,27 @@ ENERGY_SENSORS: tuple[SolarLogSensorDescription, ...] = (
         value_fn=lambda data: None if data.energy is None else data.energy["self_consumption"],
         exists_fn=lambda data: data.energy is not None,
     ),
+    # The two counters the Energy dashboard's grid section needs. The Solar-Log
+    # has no meter at the grid connection, so they are derived -- see
+    # `AdvancedSolarLogData.grid_import_year`.
+    SolarLogSensorDescription(
+        key="grid_import_year",
+        translation_key="grid_import_year",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value_fn=lambda data: data.grid_import_year,
+        exists_fn=lambda data: data.energy is not None,
+    ),
+    SolarLogSensorDescription(
+        key="grid_export_year",
+        translation_key="grid_export_year",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value_fn=lambda data: data.grid_export_year,
+        exists_fn=lambda data: data.energy is not None,
+    ),
 )
 
 DIAGNOSTIC_SENSORS: tuple[SolarLogSensorDescription, ...] = (

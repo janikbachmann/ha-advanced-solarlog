@@ -22,6 +22,7 @@ from .api import (
 from .const import (
     DOMAIN,
     FIELD_CONSUMPTION_AC,
+    FIELD_CONSUMPTION_YEAR,
     FIELD_LAST_UPDATED,
     FIELD_POWER_AC,
     FIELD_POWER_DC,
@@ -72,6 +73,37 @@ class AdvancedSolarLogData:
         if production is None or consumption is None:
             return None
         return consumption - production
+
+    @property
+    def grid_import_year(self) -> float | None:
+        """Energy drawn from the grid this year, in Wh.
+
+        The Solar-Log has no meter at the grid connection, but it does report
+        what the house used over the year and how much of the production was
+        used on site. Whatever the house used beyond that had to come from the
+        grid. Both numbers are the device's own yearly counters, so this is
+        exact arithmetic rather than power integrated over time -- nothing
+        drifts and nothing is lost across a restart.
+
+        The two numbers come from different blocks of the device, so they can
+        disagree by a rounding step; the result is clamped at zero, because a
+        `total_increasing` sensor reads a negative value as a counter reset.
+        """
+        consumption = self.number(FIELD_CONSUMPTION_YEAR)
+        if consumption is None or self.energy is None:
+            return None
+        return max(0.0, consumption - self.energy["self_consumption"])
+
+    @property
+    def grid_export_year(self) -> float | None:
+        """Energy fed into the grid this year, in Wh.
+
+        Production minus the part of it used in the house, both taken from the
+        device's own yearly energy block. See `grid_import_year`.
+        """
+        if self.energy is None:
+            return None
+        return max(0.0, self.energy["production"] - self.energy["self_consumption"])
 
     @property
     def battery_power(self) -> float | None:
