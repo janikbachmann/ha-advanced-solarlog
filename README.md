@@ -134,9 +134,25 @@ daily totals and history is under
 
 For the built-in **Energy dashboard** under Settings → Dashboards → Energy:
 
-- **Grid consumption** → the consumption energy sensors
-- **Solar production** → the yield energy sensors
-- **Battery** → the battery entities, if present
+- **Solar production** → *Total yield*, or one of the other yield counters.
+- **Grid consumption / Return to grid** → **not from this integration.** The
+  Solar-Log reports what the house produces and what it uses, not what flows
+  through the grid connection. Those two slots need a meter sitting at the
+  connection point, such as a Shelly EM. *Consumption* here is household
+  consumption, self-consumed solar included, so putting it in the grid slot
+  would count the same energy twice.
+- **Battery** → **not from this integration** either. That section wants Wh
+  counters for the energy going into and out of the battery; the Solar-Log
+  reports the battery's current power in W and its level in %, which the
+  battery entities expose but the Energy dashboard cannot use.
+
+The consumption counters are still worth having as their own history — they
+just belong on a normal dashboard card rather than in the grid slot.
+
+A newly added sensor does not appear in those pickers straight away: Home
+Assistant only offers entities it has long-term statistics for, and those are
+compiled every few minutes. After a fresh install or update, give it about ten
+minutes before concluding an entity is missing.
 
 A live flow display like the Solar-Log's own web UI can be built with the
 [Power Flow Card Plus][power-flow] from HACS; a starting configuration is
