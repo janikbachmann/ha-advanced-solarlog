@@ -11,9 +11,11 @@ views:
     path: solar
     cards:
       # --- Energy flow, built-in card ------------------------------------
-      # Shows the flow graphic from the Energy dashboard. Needs the counters
-      # from this integration entered under Settings → Dashboards → Energy
-      # (production/grid consumption/return to grid today).
+      # Shows the flow graphic from the Energy dashboard, so it needs that
+      # dashboard configured first under Settings → Dashboards → Energy. Solar
+      # production comes from this integration's yield counters; grid
+      # consumption and return need a meter at the grid connection point,
+      # which the Solar-Log is not -- see the README.
       - type: energy-distribution
         link_dashboard: true
 
