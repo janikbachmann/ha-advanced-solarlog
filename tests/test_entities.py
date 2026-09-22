@@ -83,5 +83,33 @@ export_data = coordinator.AdvancedSolarLogData(
 assert export_data.grid_power == -200.0, export_data.grid_power
 print("Grid power sign is correct for feed-in")
 
+# -- the derived grid energy counters, the two the Energy dashboard needs --
+# BASIC["114"] is consumption this year, ENERGY carries this year's production
+# and the part of it used in the house.
+grid_data = coordinator.AdvancedSolarLogData(values=BASIC, battery=None, energy=ENERGY_DICT)
+assert grid_data.grid_import_year == float(BASIC["114"]) - ENERGY_DICT["self_consumption"], (
+    grid_data.grid_import_year
+)
+assert grid_data.grid_export_year == (
+    ENERGY_DICT["production"] - ENERGY_DICT["self_consumption"]
+), grid_data.grid_export_year
+print("Grid import and export are consumption/production minus self-consumption")
+
+# A total_increasing sensor reads a negative value as a counter reset, so the
+# two blocks disagreeing by a rounding step must not push either below zero.
+skewed = coordinator.AdvancedSolarLogData(
+    values={**BASIC, "114": "1"},
+    battery=None,
+    energy={"production": 1.0, "self_consumption": 5.0},
+)
+assert skewed.grid_import_year == 0.0, skewed.grid_import_year
+assert skewed.grid_export_year == 0.0, skewed.grid_export_year
+print("Neither grid counter can go negative")
+
+# Without the login-gated energy block there is nothing to derive them from.
+no_energy = coordinator.AdvancedSolarLogData(values=BASIC, battery=None, energy=None)
+assert no_energy.grid_import_year is None and no_energy.grid_export_year is None
+print("Grid counters stay absent without the energy block")
+
 print("\nPROBLEMS:", problems or "none")
 raise SystemExit(1 if problems else 0)

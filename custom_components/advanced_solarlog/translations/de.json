@@ -72,6 +72,8 @@
       "consumption_year": { "name": "Verbrauch dieses Jahr" },
       "consumption_total": { "name": "Verbrauch gesamt" },
       "self_consumption_year": { "name": "Eigenverbrauch dieses Jahr" },
+      "grid_import_year": { "name": "Netzbezug dieses Jahr" },
+      "grid_export_year": { "name": "Einspeisung dieses Jahr" },
       "last_updated": { "name": "Zuletzt aktualisiert" },
       "installed_power": { "name": "Installierte Spitzenleistung" },
       "inverter_power": { "name": "Leistung" },

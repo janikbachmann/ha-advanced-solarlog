@@ -17,11 +17,10 @@
 ## Status
 
 > [!WARNING]
-> **Work in Progress — version 0.1.6.**
-> This integration has **not yet been tested against a real Home Assistant
-> instance**. The code is covered by automated tests and Home Assistant's own
-> checks (`hassfest`), but running it against a live Home Assistant and a real
-> device is still outstanding.
+> **Work in Progress — version 0.1.7.**
+> This integration now runs against a real Home Assistant instance and a real
+> Solar-Log, on top of the automated tests and Home Assistant's own checks
+> (`hassfest`). It has not been through a long stretch of daily use yet.
 >
 > Expect rough edges, and please report them as an [issue][issues].
 > **Version 1.0.0 lands once production use is confirmed.**
@@ -40,6 +39,7 @@ loop, no YAML configuration.
 |---|---|---|
 | Production, consumption, grid | ✅ | ✅ |
 | **Battery power and state of charge** | ❌ | ✅ |
+| **Grid consumption and return to grid, without a separate meter** | ❌ | ✅ |
 | Daily and total counters for the Energy dashboard | partial | ✅ |
 | Self-consumption | ❌ | ✅ |
 | Per-inverter power and yield | ❌ | ✅ |
@@ -62,9 +62,10 @@ Voltage and DC power are also available, disabled by default.
 ### Energy
 
 Yield and consumption for today, yesterday, this month, this year and total,
-in Wh, plus this year's self-consumption. The counters that reset (today,
-this month, this year, total) are declared `total_increasing`, so they work
-directly in the Energy dashboard.
+in Wh, plus this year's self-consumption and this year's **grid consumption
+and return to grid**. The counters that reset (today, this month, this year,
+total) are declared `total_increasing`, so they work directly in the Energy
+dashboard.
 
 ### Per inverter
 
@@ -135,19 +136,24 @@ daily totals and history is under
 For the built-in **Energy dashboard** under Settings → Dashboards → Energy:
 
 - **Solar production** → *Total yield*, or one of the other yield counters.
-- **Grid consumption / Return to grid** → **not from this integration.** The
-  Solar-Log reports what the house produces and what it uses, not what flows
-  through the grid connection. Those two slots need a meter sitting at the
-  connection point, such as a Shelly EM. *Consumption* here is household
-  consumption, self-consumed solar included, so putting it in the grid slot
-  would count the same energy twice.
-- **Battery** → **not from this integration** either. That section wants Wh
-  counters for the energy going into and out of the battery; the Solar-Log
-  reports the battery's current power in W and its level in %, which the
-  battery entities expose but the Energy dashboard cannot use.
+- **Grid consumption** → *Grid consumption this year*.
+- **Return to grid** → *Returned to grid this year*.
+- **Battery** → **not from this integration.** That section wants Wh counters
+  for the energy going into and out of the battery; the Solar-Log reports the
+  battery's current power in W and its level in %, which the battery entities
+  expose but the Energy dashboard cannot use.
 
-The consumption counters are still worth having as their own history — they
-just belong on a normal dashboard card rather than in the grid slot.
+Do **not** put the plain *Consumption* counters in the grid slot. Those are
+what the house used in total, self-consumed solar included, so they would
+count the same energy twice.
+
+The Solar-Log has no meter at the grid connection, so the two grid counters
+are derived from counters it does keep: what came from the grid is what the
+house used beyond the solar it used directly, and what went to the grid is the
+production that was not used directly. Both sides are the device's own yearly
+totals, so the figures are exact rather than power added up over time — they
+do not drift and they survive a restart. They need the device password, like
+the other protected values.
 
 A newly added sensor does not appear in those pickers straight away: Home
 Assistant only offers entities it has long-term statistics for, and those are
