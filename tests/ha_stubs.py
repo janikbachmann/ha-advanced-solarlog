@@ -58,6 +58,13 @@ sensor.SensorDeviceClass = _enum("SensorDeviceClass", [
     "TEMPERATURE", "DATA_SIZE", "VOLTAGE", "CURRENT", "TIMESTAMP"])
 sensor.SensorStateClass = _enum("SensorStateClass", ["MEASUREMENT", "TOTAL", "TOTAL_INCREASING"])
 
+async def _no_stored_data(self):
+    return None
+
+sensor.RestoreSensor = type("RestoreSensor", (), {
+    "async_get_last_sensor_data": _no_stored_data,
+})
+
 bs = _mod("homeassistant.components.binary_sensor")
 bs.BinarySensorEntity = type("BinarySensorEntity", (), {})
 bs.BinarySensorEntityDescription = _Desc
@@ -230,7 +237,16 @@ sel.TextSelectorType = _TextSelectorType
 sel.TextSelectorConfig = lambda **kw: kw
 sel.TextSelector = _TextSelector
 uc = _mod("homeassistant.helpers.update_coordinator")
-uc.CoordinatorEntity = type("CoordinatorEntity", (), {"__class_getitem__": classmethod(lambda cls, item: cls)})
+async def _noop_added(self):
+    return None
+
+uc.CoordinatorEntity = type("CoordinatorEntity", (), {
+    "__class_getitem__": classmethod(lambda cls, item: cls),
+    "__init__": lambda self, coordinator: setattr(self, "coordinator", coordinator),
+    "async_added_to_hass": _noop_added,
+    "async_write_ha_state": lambda self: None,
+    "_handle_coordinator_update": lambda self: None,
+})
 uc.DataUpdateCoordinator = type("DataUpdateCoordinator", (), {"__class_getitem__": classmethod(lambda cls, item: cls)})
 uc.UpdateFailed = type("UpdateFailed", (Exception,), {})
 dr = _mod("homeassistant.helpers.device_registry")
@@ -242,5 +258,6 @@ exc.HomeAssistantError = type("HomeAssistantError", (Exception,), {})
 import datetime as _datetime
 dt_util = _mod("homeassistant.util.dt")
 dt_util.get_default_time_zone = lambda: _datetime.timezone.utc
+dt_util.utcnow = lambda: _datetime.datetime.now(_datetime.timezone.utc)
 util = _mod("homeassistant.util")
 util.dt = dt_util

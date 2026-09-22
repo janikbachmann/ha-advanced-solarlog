@@ -111,5 +111,102 @@ no_energy = coordinator.AdvancedSolarLogData(values=BASIC, battery=None, energy=
 assert no_energy.grid_import_year is None and no_energy.grid_export_year is None
 print("Grid counters stay absent without the energy block")
 
+# -- the battery energy counters this integration adds up itself --
+# The Solar-Log reports battery power in W and no Wh counters, so these are
+# integrated from the power readings. Three things decide whether the result
+# is usable to the Energy dashboard: the arithmetic, surviving a restart, and
+# not inventing energy across an outage.
+import asyncio as _asyncio  # noqa: E402
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz  # noqa: E402
+
+
+class _FakeEntry:
+    entry_id = "entry"
+    title = "Advanced Solar-Log"
+
+
+class _FakeClient:
+    base_url = "http://192.0.2.10"
+
+
+class _FakeCoordinator:
+    config_entry = _FakeEntry()
+    client = _FakeClient()
+
+    def __init__(self, data):
+        self.data = data
+
+
+def _battery_data(charge, discharge):
+    return coordinator.AdvancedSolarLogData(
+        values=BASIC,
+        battery={"voltage": 400.0, "level": 50.0,
+                 "charge_power": charge, "discharge_power": discharge},
+        energy=None,
+    )
+
+
+CHARGED, DISCHARGED = sensor.BATTERY_ENERGY_COUNTERS
+clock = {"now": _dt(2026, 9, 22, 8, 0, tzinfo=_tz.utc)}
+sys.modules["homeassistant.util.dt"].utcnow = lambda: clock["now"]
+
+counter = sensor.AdvancedSolarLogEnergyCounter(_FakeCoordinator(_battery_data(0.0, 0.0)), CHARGED)
+_asyncio.run(counter.async_added_to_hass())
+assert counter.native_value == 0.0, counter.native_value
+
+# 1000 W held over an hour is 1000 Wh. The first reading only starts the
+# clock, so the energy arrives with the second one.
+counter.coordinator.data = _battery_data(1000.0, 0.0)
+clock["now"] += _td(minutes=10)
+counter._handle_coordinator_update()
+# Averaged across the interval: 0 W rising to 1000 W over 10 minutes.
+assert counter.native_value == round(500.0 * 600 / 3600, 3), counter.native_value
+print("Battery counter integrates power over the interval")
+
+before_gap = counter.native_value
+clock["now"] += _td(hours=6)
+counter._handle_coordinator_update()
+assert counter.native_value == before_gap, counter.native_value
+print("A long gap adds nothing instead of inventing energy")
+
+# After the gap the clock restarts, so counting resumes normally.
+clock["now"] += _td(minutes=10)
+counter._handle_coordinator_update()
+assert counter.native_value > before_gap, counter.native_value
+print("Counting resumes after the gap")
+
+# A restart must not reset the counter to zero: the Energy dashboard reads
+# the rise between two points and would see that as a full discharge.
+class _Restored:
+    native_value = 1234.5
+
+restarted = sensor.AdvancedSolarLogEnergyCounter(
+    _FakeCoordinator(_battery_data(0.0, 500.0)), DISCHARGED
+)
+restarted.async_get_last_sensor_data = lambda: _asyncio.sleep(0, result=_Restored())
+_asyncio.run(restarted.async_added_to_hass())
+assert restarted.native_value == 1234.5, restarted.native_value
+print("The counter is restored after a restart")
+
+# Each counter follows its own direction.
+assert CHARGED.power_fn(_battery_data(700.0, 0.0)) == 700.0
+assert DISCHARGED.power_fn(_battery_data(0.0, 300.0)) == 300.0
+assert CHARGED.power_fn(coordinator.AdvancedSolarLogData(values=BASIC, battery=None)) is None
+print("Charge and discharge counters read their own side")
+
+# Both are declared the way the Energy dashboard's battery section needs: the
+# same energy unit the device's own Wh counters already use, which the
+# dashboard accepts.
+WATT_HOURS = next(d for d in sensor.ENERGY_SENSORS if d.key == "yield_year")
+for description in sensor.BATTERY_ENERGY_COUNTERS:
+    assert description.device_class == sensor.SensorDeviceClass.ENERGY
+    assert description.state_class == sensor.SensorStateClass.TOTAL_INCREASING
+    assert (
+        description.native_unit_of_measurement
+        == WATT_HOURS.native_unit_of_measurement
+    ), description.native_unit_of_measurement
+    assert description.translation_key in declared, description.translation_key
+print("Battery counters are declared as energy for the Energy dashboard")
+
 print("\nPROBLEMS:", problems or "none")
 raise SystemExit(1 if problems else 0)

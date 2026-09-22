@@ -61,6 +61,8 @@
       "battery_charge_power": { "name": "Battery charge power" },
       "battery_discharge_power": { "name": "Battery discharge power" },
       "battery_voltage": { "name": "Battery voltage" },
+      "battery_energy_charged": { "name": "Battery charged" },
+      "battery_energy_discharged": { "name": "Battery discharged" },
       "yield_day": { "name": "Yield today" },
       "yield_yesterday": { "name": "Yield yesterday" },
       "yield_month": { "name": "Yield this month" },

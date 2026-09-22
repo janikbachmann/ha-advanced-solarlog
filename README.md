@@ -17,7 +17,7 @@
 ## Status
 
 > [!WARNING]
-> **Work in Progress — version 0.1.7.**
+> **Work in Progress — version 0.1.8.**
 > This integration now runs against a real Home Assistant instance and a real
 > Solar-Log, on top of the automated tests and Home Assistant's own checks
 > (`hassfest`). It has not been through a long stretch of daily use yet.
@@ -39,6 +39,7 @@ loop, no YAML configuration.
 |---|---|---|
 | Production, consumption, grid | ✅ | ✅ |
 | **Battery power and state of charge** | ❌ | ✅ |
+| **Battery charged/discharged in Wh, for the Energy dashboard** | ❌ | ✅ |
 | **Grid consumption and return to grid, without a separate meter** | ❌ | ✅ |
 | Daily and total counters for the Energy dashboard | partial | ✅ |
 | Self-consumption | ❌ | ✅ |
@@ -66,6 +67,13 @@ in Wh, plus this year's self-consumption and this year's **grid consumption
 and return to grid**. The counters that reset (today, this month, this year,
 total) are declared `total_increasing`, so they work directly in the Energy
 dashboard.
+
+With a battery there are two more: **Battery charged** and **Battery
+discharged**, in Wh. The Solar-Log keeps no such counters, so the integration
+adds them up itself from the charge and discharge power it does report. They
+survive a restart, and a gap — Home Assistant down, or the device unreachable
+— is skipped rather than filled in with the last reading, so an outage loses a
+stretch instead of inventing energy that never flowed.
 
 ### Per inverter
 
@@ -138,10 +146,10 @@ For the built-in **Energy dashboard** under Settings → Dashboards → Energy:
 - **Solar production** → *Total yield*, or one of the other yield counters.
 - **Grid consumption** → *Grid consumption this year*.
 - **Return to grid** → *Returned to grid this year*.
-- **Battery** → **not from this integration.** That section wants Wh counters
-  for the energy going into and out of the battery; the Solar-Log reports the
-  battery's current power in W and its level in %, which the battery entities
-  expose but the Energy dashboard cannot use.
+- **Battery** → *Battery charged* and *Battery discharged*. That section wants
+  Wh counters for the energy going into and out of the battery, which the
+  Solar-Log does not keep, so the integration adds them up from the charge and
+  discharge power it does report.
 
 Do **not** put the plain *Consumption* counters in the grid slot. Those are
 what the house used in total, self-consumed solar included, so they would
@@ -152,8 +160,11 @@ are derived from counters it does keep: what came from the grid is what the
 house used beyond the solar it used directly, and what went to the grid is the
 production that was not used directly. Both sides are the device's own yearly
 totals, so the figures are exact rather than power added up over time — they
-do not drift and they survive a restart. They need the device password, like
-the other protected values.
+do not drift and they survive a restart. The two battery counters are the
+other way round: the device keeps nothing to derive them from, so they are the
+battery's power added up over time, and they start from zero on the day the
+integration is installed. They all need the device password, like the other
+protected values.
 
 A newly added sensor does not appear in those pickers straight away: Home
 Assistant only offers entities it has long-term statistics for, and those are
@@ -248,7 +259,7 @@ Inclusion in the HACS default list additionally needs it in the
 [my-config-badge]: https://my.home-assistant.io/badges/config_flow_start.svg
 [brands]: https://github.com/home-assistant/brands
 [wip-badge]: https://img.shields.io/badge/Status-Work%20in%20Progress-orange.svg?style=for-the-badge
-[version-badge]: https://img.shields.io/badge/Version-0.1.0-blue.svg?style=for-the-badge
+[version-badge]: https://img.shields.io/badge/Version-0.1.8-blue.svg?style=for-the-badge
 [releases]: https://github.com/janikbachmann/ha-advanced-solarlog/releases
 [issues]: https://github.com/janikbachmann/ha-advanced-solarlog/issues
 [power-flow]: https://github.com/flixlix/power-flow-card-plus

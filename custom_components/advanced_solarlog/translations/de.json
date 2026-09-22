@@ -61,6 +61,8 @@
       "battery_charge_power": { "name": "Batterie-Ladeleistung" },
       "battery_discharge_power": { "name": "Batterie-Entladeleistung" },
       "battery_voltage": { "name": "Batteriespannung" },
+      "battery_energy_charged": { "name": "Batterie geladen" },
+      "battery_energy_discharged": { "name": "Batterie entladen" },
       "yield_day": { "name": "Ertrag heute" },
       "yield_yesterday": { "name": "Ertrag gestern" },
       "yield_month": { "name": "Ertrag diesen Monat" },
