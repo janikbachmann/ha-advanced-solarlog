@@ -1,12 +1,12 @@
 {
   "domain": "advanced_solarlog",
   "name": "Advanced Solar-Log",
-  "codeowners": ["@janikbachmann"],
+  "codeowners": ["@officialminx"],
   "config_flow": true,
-  "documentation": "https://github.com/janikbachmann/ha-advanced-solarlog",
+  "documentation": "https://github.com/officialminx/ha-advanced-solarlog",
   "integration_type": "device",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/janikbachmann/ha-advanced-solarlog/issues",
+  "issue_tracker": "https://github.com/officialminx/ha-advanced-solarlog/issues",
   "requirements": ["bcrypt>=4.0.1"],
-  "version": "0.1.8"
+  "version": "1.0.0"
 }
