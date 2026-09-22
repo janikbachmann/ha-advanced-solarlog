@@ -67,10 +67,14 @@ class AdvancedSolarLogClient:
         self.password = password or ""
         # The account name the device accepted, once one has been found.
         self.username = LOGIN_USERNAMES[0]
+        # The session cookie, sent as a header on every later request.
+        self._cookie = ""
         # Older firmware ignores the cookie and expects the session token
         # repeated in the request body.
         self._token = ""
         self._hashed_password = False
+        # One warning per client is enough when a protected value stays denied.
+        self._denial_reported = False
         # What the device answered to each login attempt of the last login.
         # Carries no password, and is what the diagnostics download reports.
         self.login_trace: list[dict[str, Any]] = []
@@ -90,6 +94,8 @@ class AdvancedSolarLogClient:
         # Solar-Log rejects application/json here; its own web UI posts the
         # JSON document as text/html and relies on the CSRF header.
         headers = {"Content-Type": "text/html", "X-SL-CSRF-PROTECTION": "1"}
+        if self._cookie:
+            headers["Cookie"] = f"SolarLog={self._cookie}"
         if self._token:
             body = f"token={self._token}; " + body
 
@@ -131,16 +137,12 @@ class AdvancedSolarLogClient:
             raise AdvancedSolarLogError(f"Solar-Log cannot answer this query: {body}")
         # The salt query legitimately carries "ACCESS DENIED" alongside the salt.
         if MARKER_DENIED in text and not text.startswith('{"550"'):
-            _LOGGER.debug(
-                "Solar-Log denied %s; token set=%s, cookie in jar for this host=%s",
-                body,
-                bool(self._token),
-                self._cookie_in_jar(),
-            )
+            _LOGGER.debug("Solar-Log denied %s; %s", body, self.login_report())
             # The device drops a session after a while, and nothing else in the
             # integration notices -- so a denial is worth one fresh login.
             if allow_relogin and self.password and await self.async_login():
                 return await self._request(body, allow_relogin=False)
+            self._report_denial()
             raise AdvancedSolarLogAuthError(
                 "Solar-Log denied access -- a password is required for this value"
             )
@@ -232,9 +234,27 @@ class AdvancedSolarLogClient:
             "known_usernames": list(LOGIN_USERNAMES),
             "password_is_hashed": self._hashed_password,
             "body_token_set": bool(self._token),
-            "cookie_in_jar": self._cookie_in_jar(),
+            "session_cookie_held": bool(self._cookie),
             "attempts": self.login_trace,
         }
+
+    def _report_denial(self) -> None:
+        """Say once, in the normal log, why a protected value stays denied.
+
+        Without this the only trace of a refused login is a debug line, and
+        asking a reporter to turn on debug logging to get at it has proven to
+        be a lot to ask -- so the whole login report goes into a single
+        warning the ordinary Home Assistant log already carries. It holds no
+        password.
+        """
+        if self._denial_reported:
+            return
+        self._denial_reported = True
+        _LOGGER.warning(
+            "Solar-Log refuses the protected values (battery, self-consumption, "
+            "per-inverter). Login report: %s",
+            self.login_report(),
+        )
 
     async def _retry_login_hashed(
         self, username: str
@@ -276,24 +296,27 @@ class AdvancedSolarLogClient:
         return text, response
 
     def _remember_session(self, response: aiohttp.ClientResponse) -> None:
-        """Make sure the session cookie survives on an IP-address host too.
+        """Keep the session cookie and send it back ourselves.
 
-        Home Assistant's shared HTTP session uses aiohttp's default cookie
-        jar, which silently drops cookies for bare IP-address hosts -- common
-        for a local device like this one. Calling `update_cookies()` without
-        a response URL stores the cookie with no host restriction at all, so
-        aiohttp attaches it to every request from this session regardless of
-        host -- the jar's `unsafe`/IP check only ever looks at the URL that
-        is passed in, and an empty one has none. This is the same workaround
-        `solarlog_cli` (the reference client this integration is modelled
-        on) uses.
+        The cookie is put on every later request as a plain `Cookie` header
+        rather than handed to the session's cookie jar. Home Assistant's
+        shared HTTP session uses aiohttp's default jar, and that jar refuses
+        to store cookies for bare IP-address hosts -- which is what a local
+        device like this one usually is. Working around that by inserting the
+        cookie with no host restriction, as the reference client
+        `solarlog_cli` does, makes the jar attach this device's session
+        cookie to *every* request the shared session sends, to any host, and
+        leaves the integration depending on jar internals that differ between
+        aiohttp versions. Sending the header is neither of those things: it
+        is explicit, it goes only to this device, and it behaves the same on
+        every version.
 
-        Some older firmware doesn't honour the cookie at all, even once it's
-        present, and instead expects the session token repeated in the
-        request body -- so that fallback is kept too, but only for the
-        plain-password login path. `solarlog_cli` restricts it the same
-        way, which suggests hashed-password (newer) firmware does not
-        expect that prefix and may reject a request body that carries it.
+        Some older firmware doesn't honour the cookie at all and instead
+        expects the session token repeated in the request body -- so that
+        fallback is kept too, but only for the plain-password login path.
+        `solarlog_cli` restricts it the same way, which suggests
+        hashed-password (newer) firmware does not expect that prefix and may
+        reject a request body that carries it.
         """
         cookie = response.cookies.get("SolarLog")
         if not cookie:
@@ -308,16 +331,9 @@ class AdvancedSolarLogClient:
             "Solar-Log session cookie captured (hashed_password=%s)",
             self._hashed_password,
         )
-        self._session.cookie_jar.update_cookies({"SolarLog": cookie.value})
+        self._cookie = cookie.value
         if not self._hashed_password:
             self._token = cookie.value
-
-    def _cookie_in_jar(self) -> bool:
-        """Debug helper: is a cookie currently attached for this host."""
-        try:
-            return bool(self._session.cookie_jar.filter_cookies(self.base_url))
-        except Exception:  # noqa: BLE001 - diagnostic only, must never break a request
-            return False
 
     async def async_test_connection(self) -> bool:
         """Check that the host really is a Solar-Log with the interface enabled."""
